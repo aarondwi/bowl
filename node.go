@@ -14,13 +14,7 @@ import (
 //
 // 3. 1 if a > b
 //
-// and should NOT return anything else
-//
-// Those comparison should be interpreted as *logically the same*
-//
-// We use a comparator instead of implementing sort.Interface.
-// One of the goal is to allow same object definition to be ordered differently,
-// based on one of its attributes
+// and NOT anything else
 type Comparator func(a, b interface{}) int
 
 const (
@@ -33,6 +27,9 @@ var errDataNotFound = errors.New("Given data is not in this node")
 var errHeightOutsideRange = errors.New("This node's height is lower than given height")
 
 // ItemHandle wraps key-value pair into single object
+//
+// Separating key and value into individual interface cause memory usage to go twice (cause 2 pointers instead of one),
+// but this also makes the usage much clearer
 type ItemHandle struct {
 	key   interface{}
 	value interface{}
@@ -47,6 +44,9 @@ type ItemHandle struct {
 // For now, it uses sync.Mutex for simplicity.
 // As algorithm and implementation becomes more settled,
 // will change to single int for lock, among others
+//
+// Another note is that I still haven't found good way to enforce data is a sort.Interface.
+// Implementing sort.Interface wouldh have the benefit that the user can easily insert batched, ordered data at once
 type Node struct {
 	mu        sync.Mutex
 	state     State
@@ -212,6 +212,14 @@ func (n *Node) checkKeyStrictlyLessThanMax(key interface{}) (bool, error) {
 		return false, errNodeIsEmpty
 	}
 	return n.cmp(key, n.data[n.dataCount-1].key) == -1, nil
+}
+
+// checkKeyStrictlyLessThanMin should only be called when Lock is held
+func (n *Node) checkKeyStrictlyLessThanMin(key interface{}) (bool, error) {
+	if n.dataCount == 0 {
+		return false, errNodeIsEmpty
+	}
+	return n.cmp(key, n.data[0].key) == -1, nil
 }
 
 // connectNode should only be called when Lock is held

@@ -65,6 +65,22 @@ func TestBOWLNode(t *testing.T) {
 		t.Fatalf("It shouldn't be found, cause `get` already return errDataNotFound, but instead it is")
 	}
 
+	ok, err = bn.checkKeyStrictlyLessThanMin(4)
+	if err != nil {
+		t.Fatalf("It shouldn't be an error, cause node has data, but instead we got %v", err)
+	}
+	if ok {
+		t.Fatal("It should be false, cause current max is key `1`")
+	}
+
+	ok, err = bn.checkKeyStrictlyLessThanMin(0)
+	if err != nil {
+		t.Fatalf("It shouldn't be an error, cause node has data, but instead we got %v", err)
+	}
+	if !ok {
+		t.Fatal("It should be true, cause current max is key `1`")
+	}
+
 	ok, err = bn.checkKeyStrictlyLessThanMax(35)
 	if err != nil {
 		t.Fatalf("It shouldn't be an error, cause node has data, but instead we got %v", err)
