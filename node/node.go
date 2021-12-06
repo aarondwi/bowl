@@ -3,7 +3,6 @@ package node
 import (
 	"errors"
 	"sync"
-	"sync/atomic"
 
 	"github.com/aarondwi/bowl/common"
 )
@@ -86,35 +85,13 @@ func (n *Node) GetHeight() int {
 }
 
 // Lock this node for change/write
-//
-// If already ready for removal, mutes is not taken, and will return false
-func (n *Node) WriteLock() bool {
-	if atomic.LoadInt32((*int32)(&n.state)) == int32(common.ACTIVE) {
-		n.mu.Lock()
-		// 2nd check, probably MARKED_REMOVED after this lock is taken
-		if atomic.LoadInt32((*int32)(&n.state)) == int32(common.MARKED_REMOVED) {
-			n.mu.Unlock()
-			return false
-		}
-		return true
-	}
-	return false
+func (n *Node) WriteLock() {
+	n.mu.Lock()
 }
 
 // Lock this node for read
-//
-// If already ready for removal, mutes is not taken, and will return false
-func (n *Node) ReadLock() bool {
-	if atomic.LoadInt32((*int32)(&n.state)) == int32(common.ACTIVE) {
-		n.mu.RLock()
-		// 2nd check, probably MARKED_REMOVED after this lock is taken
-		if atomic.LoadInt32((*int32)(&n.state)) == int32(common.MARKED_REMOVED) {
-			n.mu.Unlock()
-			return false
-		}
-		return true
-	}
-	return false
+func (n *Node) ReadLock() {
+	n.mu.RLock()
 }
 
 // Unlock this node
@@ -124,9 +101,18 @@ func (n *Node) Unlock() {
 	n.mu.Unlock()
 }
 
-// MarkRemoval should only be called when Lock is held
+// MarkRemoval mark this node as REMOVED
+//
+// Should only be called when WriteLock is held
 func (n *Node) MarkRemoval() {
-	atomic.StoreInt32(((*int32)(&n.state)), int32(common.MARKED_REMOVED))
+	n.state = common.MARKED_REMOVED
+}
+
+// MarkRemoval returns whether this node is alrady marked-removal
+//
+// Should only be called when Lock is held
+func (n *Node) MarkedRemoval() bool {
+	return n.state == common.MARKED_REMOVED
 }
 
 // GetCount returns the number of items in this node
@@ -185,12 +171,12 @@ func (n *Node) GetPositionExact(key interface{}) int {
 //
 // Should only be called when Lock is held
 func (n *Node) Insert(ih ItemHandle) error {
-	if n.dataCount == NODE_SIZE {
-		return ErrNodeIsFull
-	}
 	idx := n.GetPositionExact(ih.Key)
 	if idx != -1 {
 		return ErrKeyAlreadyExist
+	}
+	if n.dataCount == NODE_SIZE {
+		return ErrNodeIsFull
 	}
 	idx = n.GetPositionLessThanEqual(ih.Key)
 	if idx == -1 {

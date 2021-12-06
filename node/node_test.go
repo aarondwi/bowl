@@ -16,13 +16,10 @@ func cmpTest(a, b interface{}) int {
 
 func TestBOWLNode(t *testing.T) {
 	bn := NewEmptyNode(16, cmpTest)
-	ok := bn.WriteLock()
-	if !ok {
-		t.Fatal("It should be `true` but it is not")
-	}
+	bn.WriteLock()
 	defer bn.Unlock()
 
-	ok = bn.Exist(1)
+	ok := bn.Exist(1)
 	if ok {
 		t.Fatal("It should be false, cause still empty, but it is not")
 	}
@@ -48,7 +45,7 @@ func TestBOWLNode(t *testing.T) {
 		t.Fatalf("We should have 32 data, but instead we only have %d", cnt)
 	}
 
-	err = bn.Insert(ItemHandle{})
+	err = bn.Insert(ItemHandle{Key: 250})
 	if err == nil || err != ErrNodeIsFull {
 		t.Fatalf("err should be errNodeIsFull, but instead we got %v", err)
 	}
@@ -188,16 +185,12 @@ func TestBOWLNewOrderedNodeAndSplitting(t *testing.T) {
 func TestBOWLNodeMarkRemoval(t *testing.T) {
 	bn := NewEmptyNode(5, cmpTest)
 
-	ok := bn.WriteLock()
-	if !ok {
-		t.Fatal("It should be `true` but it is not")
-	}
-	bn.Unlock()
+	bn.WriteLock()
+	defer bn.Unlock()
 
 	bn.MarkRemoval()
-	ok = bn.WriteLock()
-	if ok {
-		t.Fatal("It should be `false` but it is not")
+	if !bn.MarkedRemoval() {
+		t.Fatalf("Should be already MARKED_REMOVAL, but it is not")
 	}
 }
 
@@ -250,10 +243,7 @@ func TestBOWLNodeConnect(t *testing.T) {
 
 func TestBOWLNodeScan(t *testing.T) {
 	bn := NewEmptyNode(16, cmpTest)
-	ok := bn.WriteLock()
-	if !ok {
-		t.Fatal("It should be `true` but it is not")
-	}
+	bn.WriteLock()
 	defer bn.Unlock()
 
 	for i := 30; i > 0; i-- {
