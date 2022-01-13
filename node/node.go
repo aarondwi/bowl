@@ -79,7 +79,7 @@ func NewNodeWithOrderedSlice(h int, data []ItemHandle, cmp common.Comparator) *N
 
 // GetHeight returns n.height
 //
-// Should only be called when Lock is held
+// Should only be called when Lock is held, or when no concurrency is guaranteed
 func (n *Node) GetHeight() int {
 	return n.height
 }
@@ -95,29 +95,27 @@ func (n *Node) ReadLock() {
 }
 
 // Unlock this node
-//
-// Should not be called if `wlock()` or `rlock` returns false
 func (n *Node) Unlock() {
 	n.mu.Unlock()
 }
 
 // MarkRemoval mark this node as REMOVED
 //
-// Should only be called when WriteLock is held
+// Should only be called when WriteLock is held, or when no concurrency is guaranteed
 func (n *Node) MarkRemoval() {
 	n.state = common.MARKED_REMOVED
 }
 
 // MarkRemoval returns whether this node is alrady marked-removal
 //
-// Should only be called when Lock is held
+// Should only be called when Lock is held, or when no concurrency is guaranteed
 func (n *Node) MarkedRemoval() bool {
 	return n.state == common.MARKED_REMOVED
 }
 
 // GetCount returns the number of items in this node
 //
-// Should only be called when Lock is held
+// Should only be called when Lock is held, or when no concurrency is guaranteed
 func (n *Node) GetCount() int {
 	return n.dataCount
 }
@@ -125,7 +123,7 @@ func (n *Node) GetCount() int {
 // GetPositionLessThanEqual returns the position of the key
 // less than or equal the given key
 //
-// Should only be called when Lock is held
+// Should only be called when Lock is held, or when no concurrency is guaranteed
 func (n *Node) GetPositionLessThanEqual(key interface{}) int {
 	idx := -1
 	for i := 0; i < n.dataCount; i++ {
@@ -140,7 +138,7 @@ func (n *Node) GetPositionLessThanEqual(key interface{}) int {
 // GetPositionGreaterThanEqual returns the position
 // of at least equal to the given key
 //
-// Should only be called when Lock is held
+// Should only be called when Lock is held, or when no concurrency is guaranteed
 func (n *Node) GetPositionGreaterThanEqual(key interface{}) int {
 	idx := -1
 	for i := 0; i < n.dataCount; i++ {
@@ -154,7 +152,7 @@ func (n *Node) GetPositionGreaterThanEqual(key interface{}) int {
 
 // GetPositionExact returns the position of the key in the node
 //
-// Should only be called when Lock is held
+// Should only be called when Lock is held, or when no concurrency is guaranteed
 func (n *Node) GetPositionExact(key interface{}) int {
 	idx := -1
 	for i := 0; i < n.dataCount; i++ {
@@ -169,7 +167,7 @@ func (n *Node) GetPositionExact(key interface{}) int {
 // Insert ih into current node.
 // Whether this node is the correct node, is left for the upper layer
 //
-// Should only be called when Lock is held
+// Should only be called when Lock is held, or when no concurrency is guaranteed
 func (n *Node) Insert(ih ItemHandle) error {
 	idx := n.GetPositionExact(ih.Key)
 	if idx != -1 {
@@ -191,7 +189,7 @@ func (n *Node) Insert(ih ItemHandle) error {
 
 // Delete the specified key, if any
 //
-// Should only be called when Lock is held
+// Should only be called when Lock is held, or when no concurrency is guaranteed
 func (n *Node) Delete(key interface{}) error {
 	if n.dataCount == 0 {
 		return ErrNodeIsEmpty
@@ -207,7 +205,7 @@ func (n *Node) Delete(key interface{}) error {
 
 // Update the itemHandle for d.Key into d
 //
-// Should only be called when Lock is held
+// Should only be called when Lock is held, or when no concurrency is guaranteed
 func (n *Node) Update(d ItemHandle) error {
 	if n.dataCount == 0 {
 		return ErrNodeIsEmpty
@@ -222,7 +220,7 @@ func (n *Node) Update(d ItemHandle) error {
 
 // Get returns the value for the specified key, if any
 //
-// Should only be called when Lock is held
+// Should only be called when Lock is held, or when no concurrency is guaranteed
 func (n *Node) Get(key interface{}) (interface{}, error) {
 	if n.dataCount == 0 {
 		return nil, ErrNodeIsEmpty
@@ -236,7 +234,7 @@ func (n *Node) Get(key interface{}) (interface{}, error) {
 
 // Exist checks when the given key is in this node
 //
-// Should only be called when Lock is held
+// Should only be called when Lock is held, or when no concurrency is guaranteed
 func (n *Node) Exist(key interface{}) bool {
 	if n.dataCount == 0 {
 		return false
@@ -247,7 +245,7 @@ func (n *Node) Exist(key interface{}) bool {
 
 // CheckKeyStrictlyLessThanMax checks whether key is less than the biggest value in this node
 //
-// Should only be called when Lock is held
+// Should only be called when Lock is held, or when no concurrency is guaranteed
 func (n *Node) CheckKeyStrictlyLessThanMax(key interface{}) (bool, error) {
 	if n.dataCount == 0 {
 		return false, ErrNodeIsEmpty
@@ -257,7 +255,7 @@ func (n *Node) CheckKeyStrictlyLessThanMax(key interface{}) (bool, error) {
 
 // CheckKeyStrictlyLessThanMin checks whether key is less than the smallest value in this node
 //
-// Should only be called when Lock is held
+// Should only be called when Lock is held, or when no concurrency is guaranteed
 func (n *Node) CheckKeyStrictlyLessThanMin(key interface{}) (bool, error) {
 	if n.dataCount == 0 {
 		return false, ErrNodeIsEmpty
@@ -267,7 +265,7 @@ func (n *Node) CheckKeyStrictlyLessThanMin(key interface{}) (bool, error) {
 
 // ConnectNode set nextNodes at height `atHeight` to `next`
 //
-// Should only be called when Lock is held
+// Should only be called when Lock is held, or when no concurrency is guaranteed
 func (n *Node) ConnectNode(atHeight int, next *Node) error {
 	if atHeight < 0 || atHeight >= n.height {
 		return ErrHeightOutsideRange
@@ -278,7 +276,7 @@ func (n *Node) ConnectNode(atHeight int, next *Node) error {
 
 // DisconnectNode set nextNodes at height `atHeight` to nil
 //
-// Should only be called either when Lock is held
+// Should only be called either when Lock is held, or when no concurrency is guaranteed
 // or when already marked for removal
 func (n *Node) DisconnectNode(atHeight int) error {
 	if atHeight < 0 || atHeight >= n.height {
@@ -290,7 +288,7 @@ func (n *Node) DisconnectNode(atHeight int) error {
 
 // GetNextNodeAt returns the next node at the given `atHeight`
 //
-// Should only be called either when Lock is held
+// Should only be called either when Lock is held, or when no concurrency is guaranteed
 func (n *Node) GetNextNodeAt(atHeight int) (*Node, error) {
 	if atHeight < 0 || atHeight >= n.height {
 		return nil, ErrHeightOutsideRange
@@ -300,7 +298,7 @@ func (n *Node) GetNextNodeAt(atHeight int) (*Node, error) {
 
 // ScanAll pass each data to fn
 //
-// Should only be called either when Lock is held
+// Should only be called either when Lock is held, or when no concurrency is guaranteed
 func (n *Node) ScanAll(fn func(ItemHandle)) {
 	for i := 0; i < n.GetCount(); i++ {
 		fn(n.data[i])
@@ -309,7 +307,7 @@ func (n *Node) ScanAll(fn func(ItemHandle)) {
 
 // ScanGreaterThanEqual pass each data greater than `key` to fn
 //
-// Should only be called either when Lock is held
+// Should only be called either when Lock is held, or when no concurrency is guaranteed
 func (n *Node) ScanGreaterThanEqual(key interface{}, fn func(ItemHandle)) {
 	ok, _ := n.CheckKeyStrictlyLessThanMax(key)
 	if !ok {
@@ -328,7 +326,7 @@ func (n *Node) ScanGreaterThanEqual(key interface{}, fn func(ItemHandle)) {
 
 // ScanStrictlyLessThan pass each data strictly less than `key` to fn
 //
-// Should only be called either when Lock is held
+// Should only be called either when Lock is held, or when no concurrency is guaranteed
 func (n *Node) ScanStrictlyLessThan(key interface{}, fn func(ItemHandle)) {
 	ok, _ := n.CheckKeyStrictlyLessThanMin(key)
 	if ok {
@@ -348,10 +346,20 @@ func (n *Node) ScanStrictlyLessThan(key interface{}, fn func(ItemHandle)) {
 // SplitIntoNewNode split current node's contents with the first half still in current node
 // and second half into returned node (may be empty)
 //
-// Should only be called either when Lock is held
+// Should only be called either when Lock is held, or when no concurrency is guaranteed
 func (n *Node) SplitIntoNewNode(h int) *Node {
 	posToSplit := n.dataCount / 2
 	newNode := NewNodeWithOrderedSlice(h, n.data[posToSplit:], n.cmp)
 	n.dataCount = posToSplit
 	return newNode
+}
+
+// GetMinKey returns the key at pos 0, if any
+//
+// Should only be called either when Lock is held, or when no concurrency is guaranteed
+func (n *Node) GetMinKey() (interface{}, error) {
+	if n.dataCount == 0 {
+		return nil, ErrNodeIsEmpty
+	}
+	return n.data[0].Key, nil
 }

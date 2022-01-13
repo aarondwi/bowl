@@ -1,7 +1,7 @@
 package concurrent
 
 import (
-	"log"
+	"fmt"
 
 	"github.com/aarondwi/bowl/common"
 	"github.com/aarondwi/bowl/node"
@@ -34,16 +34,10 @@ func NewBOWL(cmp common.Comparator) *BowlConcurrent {
 // Note that keys should already be ascending-sorted, or else the result is NOT guaranteed
 func (b *BowlConcurrent) Get(keys []interface{}) []interface{} {
 	result := make([]interface{}, len(keys))
-
-	// currentNode is already locked
 	currentNode := b.getNextNodeFromHead(keys[0])
 
 	for i, k := range keys {
 		b.getCorrectNode(k, currentNode)
-		// can help with delete later
-
-		// ok, means should already be at correct node, or nothing at all
-		// any error means v is nil
 		v, _ := currentNode.Get(k)
 		result[i] = v
 	}
@@ -51,13 +45,11 @@ func (b *BowlConcurrent) Get(keys []interface{}) []interface{} {
 	return result
 }
 
-// Update returns all values for the given keys
+// Update updates ih[i].Value when mathing ih[i].Key found
 //
 // Note that keys should already be ascending-sorted, or else the result is NOT guaranteed
 func (b *BowlConcurrent) Update(ihs []node.ItemHandle) []error {
 	errs := make([]error, len(ihs))
-
-	// currentNode is already locked
 	currentNode := b.getNextNodeFromHead(ihs[0].Key)
 
 	for i, ih := range ihs {
@@ -68,13 +60,11 @@ func (b *BowlConcurrent) Update(ihs []node.ItemHandle) []error {
 	return errs
 }
 
-// Delete returns all values for the given keys
+// Delete removes all matching keys
 //
 // Note that keys should already be ascending-sorted, or else the result is NOT guaranteed
 func (b *BowlConcurrent) Delete(keys []interface{}) []error {
 	errs := make([]error, len(keys))
-
-	// currentNode is already locked
 	currentNode := b.getNextNodeFromHead(keys[0])
 
 	for i, k := range keys {
@@ -134,8 +124,7 @@ func (b *BowlConcurrent) Insert(ihs []node.ItemHandle) []error {
 				currentNode = newNode
 			}
 			if err != nil {
-				log.Printf("After splitting, still got err :%v", err)
-				panic("Should be no error here, means something is broken")
+				panic(fmt.Sprintf("Should be no error here, means something is brokenL %v", err))
 			}
 		}
 		errs[i] = err
@@ -245,6 +234,7 @@ func (b *BowlConcurrent) ScanGreaterThanEqual(key interface{}, fn func(node.Item
 	}
 }
 
+// ScanGreaterThanEqual pass each data until `key` to fn
 func (b *BowlConcurrent) ScanStrictlyLessThan(key interface{}, fn func(node.ItemHandle)) {
 	node := b.getValidNodeToStartScan()
 	if node == nil {
@@ -284,11 +274,9 @@ func (b *BowlConcurrent) ScanStrictlyLessThan(key interface{}, fn func(node.Item
 func (b *BowlConcurrent) ScanRange(fromKey interface{}, toKey interface{}, fn func(node.ItemHandle)) {
 	node := b.getNextNodeFromHead(fromKey)
 	b.getCorrectNode(fromKey, node)
-	// after this node, the rest should be all-valid
 	node.ScanGreaterThanEqual(fromKey, fn)
 
 	for {
-		// can be optimized with start from middle, all, scan till middle
 		next, _ := node.GetNextNodeAt(0)
 		if next == nil {
 			node.Unlock()
@@ -371,9 +359,7 @@ func (b *BowlConcurrent) getNextNodeFromHead(key interface{}) *node.Node {
 func (b *BowlConcurrent) getCorrectNode(key interface{}, currentNode *node.Node) {
 	h := currentNode.GetHeight()
 	for {
-		// basically, is it supposed to be at this node?
 		ok, _ := currentNode.CheckKeyStrictlyLessThanMax(key)
-
 		if ok {
 			return
 		}
@@ -392,7 +378,7 @@ func (b *BowlConcurrent) getCorrectNode(key interface{}, currentNode *node.Node)
 			}
 
 			n.WriteLock()
-			ok = b.getNextNodeAtHeightNotMarkedRemoval(h, b.head, n)
+			ok = b.getNextNodeAtHeightNotMarkedRemoval(h, currentNode, n)
 			if !ok {
 				h--
 				continue

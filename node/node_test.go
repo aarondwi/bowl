@@ -29,6 +29,11 @@ func TestBOWLNode(t *testing.T) {
 		t.Fatalf("err should be errNodeIsEmpty, but instead we got %v", err)
 	}
 
+	_, err = bn.GetMinKey()
+	if err == nil || err != ErrNodeIsEmpty {
+		t.Fatalf("err should be errNodeIsEmpty, but instead we got %v", err)
+	}
+
 	err = bn.Insert(ItemHandle{Key: 1, Value: 1})
 	if err != nil {
 		t.Fatalf("It should be okay to insert, but instead we got %v", err)
@@ -56,6 +61,14 @@ func TestBOWLNode(t *testing.T) {
 	}
 	if val.(int) != 16 {
 		t.Fatalf("Val should be 16, but instead we got %d", val.(int))
+	}
+
+	val, err = bn.GetMinKey()
+	if err != nil {
+		t.Fatalf("err should be nil, caused has data, but instead we got %v", err)
+	}
+	if val.(int) != 1 {
+		t.Fatalf("Val (minKey) should be 1, but instead we got %d", val.(int))
 	}
 
 	_, err = bn.Get(33)

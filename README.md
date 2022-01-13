@@ -8,3 +8,6 @@ Downsides are no backward check/scan, only one way (like any other skiplists).
 
 1. reduce number of pointers -> reduce memory usage
 2. add `hint` API, so can skip head
+3. possibly reuse some objects?
+4. Guarantee correct positioning of data on `getCorrectNode`
+5. Add fuzzy test
