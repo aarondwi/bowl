@@ -48,7 +48,7 @@ func (b *BowlExclusive) Get(keys []interface{}) []interface{} {
 	currentNode := b.getNextNodeFromHead(keys[0])
 
 	for i, k := range keys {
-		b.getCorrectNode(k, currentNode)
+		currentNode = b.getCorrectNode(k, currentNode)
 		v, _ := currentNode.Get(k)
 		result[i] = v
 	}
@@ -66,7 +66,7 @@ func (b *BowlExclusive) Update(ihs []node.ItemHandle) []error {
 
 	currentNode := b.getNextNodeFromHead(ihs[0].Key)
 	for i, ih := range ihs {
-		b.getCorrectNodeFromItemHandle(ih, currentNode)
+		currentNode = b.getCorrectNodeFromItemHandle(ih, currentNode)
 		errs[i] = currentNode.Update(ih)
 	}
 	return errs
@@ -84,7 +84,7 @@ func (b *BowlExclusive) Delete(keys []interface{}) []error {
 	currentNode := b.getNextNodeFromHead(keys[0])
 
 	for i, k := range keys {
-		b.getCorrectNode(k, currentNode)
+		currentNode = b.getCorrectNode(k, currentNode)
 		errs[i] = currentNode.Delete(k)
 		if currentNode.GetCount() == 0 {
 			currentNode.MarkRemoval()
@@ -113,7 +113,7 @@ func (b *BowlExclusive) connectUntil(
 				currentNode.ConnectNode(h, targetNode)
 				break
 			}
-			ok := b.getNextNodeAtHeightNotMarkedRemoval(h, currentNode, n)
+			ok, n := b.getNextNodeAtHeightNotMarkedRemoval(h, currentNode, n)
 			if !ok {
 				currentNode.ConnectNode(h, targetNode)
 				break
@@ -141,7 +141,7 @@ func (b *BowlExclusive) Insert(ihs []node.ItemHandle) []error {
 	currentNode := b.getNextNodeFromHead(ihs[0].Key)
 
 	for i, ih := range ihs {
-		b.getCorrectNodeFromItemHandle(ih, currentNode)
+		currentNode = b.getCorrectNodeFromItemHandle(ih, currentNode)
 		err := currentNode.Insert(ih)
 		if err != nil && err == node.ErrNodeIsFull {
 			newHeight := <-b.ch
@@ -172,20 +172,22 @@ func (b *BowlExclusive) Insert(ihs []node.ItemHandle) []error {
 	return errs
 }
 
-func (b *BowlExclusive) scanNextNodeNotMarkedRemoval(prev, next *node.Node) bool {
+func (b *BowlExclusive) scanNextNodeNotMarkedRemoval(
+	prev, next *node.Node) (bool, *node.Node) {
 	for next.MarkedRemoval() {
 		afterNext, _ := next.GetNextNodeAt(0)
 		if afterNext == nil {
-			return false
+			return false, next
 		}
 		prev.ConnectNode(0, afterNext)
 		next.DisconnectNode(0)
 		next = afterNext
 	}
-	return true
+	return true, next
 }
 
-func (b *BowlExclusive) getNextNodeAtHeightNotMarkedRemoval(h int, prev, next *node.Node) bool {
+func (b *BowlExclusive) getNextNodeAtHeightNotMarkedRemoval(
+	h int, prev, next *node.Node) (bool, *node.Node) {
 	atLeast1NotMarkedRemovalAtThisHeight := true
 	for next.MarkedRemoval() {
 		afterNext, _ := next.GetNextNodeAt(h)
@@ -197,7 +199,7 @@ func (b *BowlExclusive) getNextNodeAtHeightNotMarkedRemoval(h int, prev, next *n
 		next.DisconnectNode(h)
 		next = afterNext
 	}
-	return atLeast1NotMarkedRemovalAtThisHeight
+	return atLeast1NotMarkedRemovalAtThisHeight, next
 }
 
 func (b *BowlExclusive) getValidNodeToStartScan() *node.Node {
@@ -205,7 +207,7 @@ func (b *BowlExclusive) getValidNodeToStartScan() *node.Node {
 	if node == nil {
 		return nil
 	}
-	ok := b.getNextNodeAtHeightNotMarkedRemoval(0, b.head, node)
+	ok, node := b.getNextNodeAtHeightNotMarkedRemoval(0, b.head, node)
 	if !ok {
 		return nil
 	}
@@ -228,7 +230,7 @@ func (b *BowlExclusive) ScanAll(fn func(node.ItemHandle)) {
 		if next == nil {
 			break
 		}
-		ok := b.scanNextNodeNotMarkedRemoval(node, next)
+		ok, next := b.scanNextNodeNotMarkedRemoval(node, next)
 		if !ok {
 			return
 		}
@@ -237,19 +239,20 @@ func (b *BowlExclusive) ScanAll(fn func(node.ItemHandle)) {
 }
 
 // ScanGreaterThanEqual pass each data greater than `key` to fn
-func (b *BowlExclusive) ScanGreaterThanEqual(key interface{}, fn func(node.ItemHandle)) {
+func (b *BowlExclusive) ScanGreaterThanEqual(
+	key interface{}, fn func(node.ItemHandle)) {
 	b.Lock()
 	defer b.Unlock()
 
 	node := b.getNextNodeFromHead(key)
-	b.getCorrectNode(key, node)
+	node = b.getCorrectNode(key, node)
 	node.ScanGreaterThanEqual(key, fn)
 	for {
 		next, _ := node.GetNextNodeAt(0)
 		if next == nil {
 			break
 		}
-		ok := b.scanNextNodeNotMarkedRemoval(node, next)
+		ok, next := b.scanNextNodeNotMarkedRemoval(node, next)
 		if !ok {
 			return
 		}
@@ -259,7 +262,8 @@ func (b *BowlExclusive) ScanGreaterThanEqual(key interface{}, fn func(node.ItemH
 }
 
 // ScanGreaterThanEqual pass each data until `key` to fn
-func (b *BowlExclusive) ScanStrictlyLessThan(key interface{}, fn func(node.ItemHandle)) {
+func (b *BowlExclusive) ScanStrictlyLessThan(
+	key interface{}, fn func(node.ItemHandle)) {
 	b.Lock()
 	defer b.Unlock()
 
@@ -280,7 +284,7 @@ func (b *BowlExclusive) ScanStrictlyLessThan(key interface{}, fn func(node.ItemH
 		if next == nil {
 			break
 		}
-		ok = b.scanNextNodeNotMarkedRemoval(node, next)
+		ok, next = b.scanNextNodeNotMarkedRemoval(node, next)
 		if !ok {
 			return
 		}
@@ -293,12 +297,13 @@ func (b *BowlExclusive) ScanStrictlyLessThan(key interface{}, fn func(node.ItemH
 }
 
 // ScanRange pass each data between fromKey <= data <= toKey
-func (b *BowlExclusive) ScanRange(fromKey interface{}, toKey interface{}, fn func(node.ItemHandle)) {
+func (b *BowlExclusive) ScanRange(
+	fromKey interface{}, toKey interface{}, fn func(node.ItemHandle)) {
 	b.Lock()
 	defer b.Unlock()
 
 	node := b.getNextNodeFromHead(fromKey)
-	b.getCorrectNode(fromKey, node)
+	node = b.getCorrectNode(fromKey, node)
 	node.ScanGreaterThanEqual(fromKey, fn)
 
 	for {
@@ -306,7 +311,7 @@ func (b *BowlExclusive) ScanRange(fromKey interface{}, toKey interface{}, fn fun
 		if next == nil {
 			break
 		}
-		ok := b.scanNextNodeNotMarkedRemoval(node, next)
+		ok, next := b.scanNextNodeNotMarkedRemoval(node, next)
 		if !ok {
 			return
 		}
@@ -342,7 +347,7 @@ func (b *BowlExclusive) getNextNodeFromHead(key interface{}) *node.Node {
 			continue
 		}
 
-		ok := b.getNextNodeAtHeightNotMarkedRemoval(h, b.head, next)
+		ok, next := b.getNextNodeAtHeightNotMarkedRemoval(h, b.head, next)
 		if !ok {
 			h--
 			continue
@@ -369,12 +374,13 @@ func (b *BowlExclusive) getNextNodeFromHead(key interface{}) *node.Node {
 // getCorrectNode returns the node that should has the key
 //
 // splitting this function from `getNextNodeFromHead` cause we have some logic skipping on head
-func (b *BowlExclusive) getCorrectNode(key interface{}, currentNode *node.Node) {
+func (b *BowlExclusive) getCorrectNode(
+	key interface{}, currentNode *node.Node) *node.Node {
 	h := currentNode.GetHeight()
 	for {
 		ok, _ := currentNode.CheckKeyStrictlyLessThanMax(key)
 		if ok {
-			return
+			return currentNode
 		}
 
 		// ---------------------------------------------------
@@ -386,26 +392,26 @@ func (b *BowlExclusive) getCorrectNode(key interface{}, currentNode *node.Node) 
 		// ---------------------------------------------------
 		atLeastCheck1NextNode := false
 		for h >= 0 {
-			n, _ := currentNode.GetNextNodeAt(h)
-			if n == nil {
+			next, _ := currentNode.GetNextNodeAt(h)
+			if next == nil {
 				h--
 				continue
 			}
 
-			ok = b.getNextNodeAtHeightNotMarkedRemoval(h, currentNode, n)
+			ok, next = b.getNextNodeAtHeightNotMarkedRemoval(h, currentNode, next)
 			if !ok {
 				h--
 				continue
 			}
 
 			atLeastCheck1NextNode = true
-			ok, _ = n.CheckKeyStrictlyLessThanMin(key)
+			ok, _ = next.CheckKeyStrictlyLessThanMin(key)
 			if ok {
 				h--
 				continue
 			}
 
-			currentNode = n
+			currentNode = next
 			break
 		}
 
@@ -413,11 +419,13 @@ func (b *BowlExclusive) getCorrectNode(key interface{}, currentNode *node.Node) 
 			break
 		}
 	}
+	return currentNode
 }
 
 // getCorrectNode returns the node that should has the key
 //
 // splitting this function from `getNextNodeFromHead` cause we have some logic skipping on head
-func (b *BowlExclusive) getCorrectNodeFromItemHandle(ih node.ItemHandle, currentNode *node.Node) {
-	b.getCorrectNode(ih.Key, currentNode)
+func (b *BowlExclusive) getCorrectNodeFromItemHandle(
+	ih node.ItemHandle, currentNode *node.Node) *node.Node {
+	return b.getCorrectNode(ih.Key, currentNode)
 }
