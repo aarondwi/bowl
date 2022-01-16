@@ -1,13 +1,12 @@
 # bowl
 
 An experimental skip list variant, which is a skip-zip-list, optimized for batched workloads (affect how we search the next item)
-There are 3 versions (`exclusive`, `singlewriter`, `concurrent`).
+There are 2 versions `exclusive` and `concurrent`.
 Downsides are no backward check/scan, only one way (like any other skiplists).
 
 ## todo
 
+0. Actually finish the exclusive and concurrent version
 1. reduce number of pointers -> reduce memory usage
 2. add `hint` API, so can skip head
-3. possibly reuse some objects?
-4. Guarantee correct positioning of data on `getCorrectNode`
-5. Add fuzzy test
+3. Add fuzzy test

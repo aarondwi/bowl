@@ -39,7 +39,7 @@ type ItemHandle struct {
 // Another note is that I still haven't found good way to enforce data is a sort.Interface.
 // Implementing sort.Interface wouldh have the benefit that the user can easily insert batched, ordered data at once
 type Node struct {
-	mu        sync.RWMutex
+	mu        sync.Mutex
 	state     common.State
 	cmp       common.Comparator
 	dataCount int
@@ -51,7 +51,7 @@ type Node struct {
 // NewEmptyNode creates Node with height h and given common.comparator
 func NewEmptyNode(h int, cmp common.Comparator) *Node {
 	return &Node{
-		mu:        sync.RWMutex{},
+		mu:        sync.Mutex{},
 		state:     common.ACTIVE,
 		cmp:       cmp,
 		dataCount: 0,
@@ -64,7 +64,7 @@ func NewEmptyNode(h int, cmp common.Comparator) *Node {
 // NewNodeWithOrderedSlice creates Node with height h, given initial data and common.comparator
 func NewNodeWithOrderedSlice(h int, data []ItemHandle, cmp common.Comparator) *Node {
 	n := &Node{
-		mu:        sync.RWMutex{},
+		mu:        sync.Mutex{},
 		state:     common.ACTIVE,
 		cmp:       cmp,
 		dataCount: 0,
@@ -87,11 +87,6 @@ func (n *Node) GetHeight() int {
 // Lock this node for change/write
 func (n *Node) WriteLock() {
 	n.mu.Lock()
-}
-
-// Lock this node for read
-func (n *Node) ReadLock() {
-	n.mu.RLock()
 }
 
 // Unlock this node
