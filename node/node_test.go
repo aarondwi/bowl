@@ -158,6 +158,10 @@ func TestBOWLNode(t *testing.T) {
 	if !bn.Exist(16) || !newNode.Exist(18) {
 		t.Fatalf("It should be split evenly, with 16 and 18 as the cut position, but instead we got %v and %v", bn.data, newNode.data)
 	}
+
+	if bn.GetCount() != 16 || newNode.GetCount() != 16 {
+		t.Fatalf("Both should be 16, but instead we got %d and %d", bn.GetCount(), newNode.GetCount())
+	}
 }
 
 func TestBOWLNewOrderedNodeAndSplitting(t *testing.T) {

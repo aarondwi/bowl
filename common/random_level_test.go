@@ -1,6 +1,8 @@
 package common
 
-import "testing"
+import (
+	"testing"
+)
 
 func TestRandomLevelGenerator(t *testing.T) {
 	ch := RandomLevelGenerator(32)

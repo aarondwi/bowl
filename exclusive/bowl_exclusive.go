@@ -339,8 +339,7 @@ func (b *BowlExclusive) ScanRange(
 //
 // The node returned will never be nil, and is already locked
 func (b *BowlExclusive) getNextNodeFromHead(key interface{}) *node.Node {
-	var n *node.Node
-	for h := MAX_HEIGHT - 1; h >= 0; {
+	for h := MAX_HEIGHT - 1; h > 0; {
 		next, _ := b.head.GetNextNodeAt(h)
 		if next == nil {
 			h--
@@ -353,20 +352,24 @@ func (b *BowlExclusive) getNextNodeFromHead(key interface{}) *node.Node {
 			continue
 		}
 
-		ok, _ = next.CheckKeyStrictlyLessThanMin(key)
-		if !ok { // meaning bigger than next min
+		ok, err := next.CheckKeyStrictlyLessThanMin(key)
+		if err != nil && !ok { // meaning bigger than next min
 			return next
 		}
 		h--
 	}
 
-	// meaning this BOWL is empty, create new
+	// now check at height 0, cause already checked till height 1
+	// and still no matches
+	n, _ := b.head.GetNextNodeAt(0)
 	if n == nil {
+		// meaning this BOWL is empty, create new
 		nextHeight := <-b.ch
-		next := node.NewEmptyNode(nextHeight, b.cmp)
+		newNode := node.NewEmptyNode(nextHeight, b.cmp)
 		for i := 0; i < nextHeight; i++ {
-			b.head.ConnectNode(i, next)
+			b.head.ConnectNode(i, newNode)
 		}
+		return newNode
 	}
 	return n
 }

@@ -319,7 +319,6 @@ func (b *BowlConcurrent) ScanRange(
 //
 // The node returned will never be nil, and is already locked
 func (b *BowlConcurrent) getNextNodeFromHead(key interface{}) *node.Node {
-	var currentNode *node.Node
 	b.head.WriteLock()
 	for h := MAX_HEIGHT - 1; h >= 0; {
 		next, _ := b.head.GetNextNodeAt(h)
@@ -337,25 +336,28 @@ func (b *BowlConcurrent) getNextNodeFromHead(key interface{}) *node.Node {
 
 		ok, _ = next.CheckKeyStrictlyLessThanMin(key)
 		if !ok { // meaning bigger than next min
-			currentNode = next // still locked when returned
 			b.head.Unlock()
-			return currentNode
+			return next // still locked when returned
 		}
 		next.Unlock() // wrong one, check others
 		h--
 	}
 
-	// meaning this BOWL is empty, create new
-	if currentNode == nil {
+	// now check at height 0, cause already checked till height 1
+	// and still no matches
+	n, _ := b.head.GetNextNodeAt(0)
+	if n == nil {
+		// meaning this BOWL is empty, create new
 		nextHeight := <-b.ch
-		next := node.NewEmptyNode(nextHeight, b.cmp)
+		newNode := node.NewEmptyNode(nextHeight, b.cmp)
 		for i := 0; i < nextHeight; i++ {
-			b.head.ConnectNode(i, next)
+			b.head.ConnectNode(i, newNode)
 		}
+		n = newNode
 	}
-	currentNode.WriteLock()
+	n.WriteLock()
 	b.head.Unlock()
-	return currentNode
+	return n
 }
 
 // getCorrectNode returns the node that should has the key
