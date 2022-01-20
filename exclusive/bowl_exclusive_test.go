@@ -1,7 +1,9 @@
 package exclusive
 
 import (
+	"math/rand"
 	"testing"
+	"time"
 
 	"github.com/aarondwi/bowl/node"
 )
@@ -25,7 +27,8 @@ func TestBowlExclusive(t *testing.T) {
 		j := 1 + (i * 5)
 		insert1 = append(insert1, node.ItemHandle{Key: j, Value: j})
 	}
-	insert2 := make([]node.ItemHandle, 0, 80)
+	insert2 := make([]node.ItemHandle, 0, 81)
+	insert2 = append(insert2, node.ItemHandle{Key: 11, Value: 11})
 	for i := 0; i < 80; i++ {
 		j := 2 + (i * 5)
 		insert2 = append(insert2, node.ItemHandle{Key: j, Value: j})
@@ -37,7 +40,10 @@ func TestBowlExclusive(t *testing.T) {
 		}
 	}
 	errs = b.Insert(insert2)
-	for _, err := range errs {
+	if errs[0] == nil || errs[0] != node.ErrKeyAlreadyExist {
+		t.Fatalf("errs[0] should be ErrKeyAlreadyExist, cause it is, but instead we got %v", errs[0])
+	}
+	for _, err := range errs[1:] {
 		if err != nil {
 			t.Fatalf("Shouldn't return error when inserting `from2`, but instead we got %v", err)
 		}
@@ -202,5 +208,88 @@ func TestBowlExclusive(t *testing.T) {
 	})
 	if (ltSum1 != ltSum2) || ltSum1 != 3839 {
 		t.Fatalf("Both should be the same, and is 3839, but instead we got %d and %d", ltSum1, ltSum2)
+	}
+}
+
+func BenchmarkBowlExclusiveWrite(b *testing.B) {
+	// we only test insert
+	// as it is already representative about update and delete
+	//
+	// update and delete both also search, but will not result in reconnection scheme
+	b.StopTimer()
+	ch := make(chan []node.ItemHandle, 4096)
+	go func() {
+		rnd := rand.New(rand.NewSource(rand.Int63()))
+		for {
+			data := make([]node.ItemHandle, 0, 1024)
+			prev := 0
+			for j := 0; j < 1024; j++ {
+				val := prev + rnd.Intn(65536) + 1
+				data = append(data, node.ItemHandle{Key: val, Value: val})
+				prev = val
+			}
+			ch <- data
+		}
+	}()
+	time.Sleep(5)
+	bowl := NewBOWL(cmpTest)
+	b.StartTimer()
+	for i := 0; i < b.N; i++ {
+		data := <-ch
+		errs := bowl.Insert(data)
+		for _, err := range errs {
+			if err != nil && err != node.ErrKeyAlreadyExist {
+				b.Fatal(err)
+			}
+		}
+	}
+}
+
+func BenchmarkBowlExclusiveRead(b *testing.B) {
+	b.StopTimer()
+
+	chInsert := make(chan []node.ItemHandle, 4096)
+	go func() { // for insertion
+		rnd := rand.New(rand.NewSource(rand.Int63()))
+		for i := 0; i < 2048; i++ {
+			data := make([]node.ItemHandle, 0, 1024)
+			prev := 0
+			for j := 0; j < 1024; j++ {
+				val := prev + rnd.Intn(65536) + 1
+				data = append(data, node.ItemHandle{Key: val, Value: val})
+				prev = val
+			}
+			chInsert <- data
+		}
+	}()
+	time.Sleep(5)
+	chRead := make(chan []interface{}, 4096)
+	go func() { // for read benchmark
+		rnd := rand.New(rand.NewSource(rand.Int63()))
+		for {
+			data := make([]interface{}, 0, 2048)
+			prev := 0
+			for j := 0; j < 2048; j++ {
+				val := prev + rnd.Intn(65536) + 1
+				data = append(data, val)
+				prev = val
+			}
+			chRead <- data
+		}
+	}()
+	bowl := NewBOWL(cmpTest)
+	for i := 0; i < 2048; i++ {
+		data := <-chInsert
+		bowl.Insert(data)
+	}
+	b.StartTimer()
+	for i := 0; i < b.N; i++ {
+		data := <-chRead
+		res := bowl.Get(data)
+		for j, r := range res {
+			if r != nil && r.(int) != data[j].(int) {
+				b.Fatalf("Should be the same, but instead we got %d and %d", r.(int), data[j].(int))
+			}
+		}
 	}
 }
