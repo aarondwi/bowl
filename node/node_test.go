@@ -168,7 +168,7 @@ func TestBOWLNewOrderedNodeAndSplitting(t *testing.T) {
 	ihs := make([]ItemHandle, 2)
 	ihs[0] = ItemHandle{Key: 1, Value: 1}
 	ihs[1] = ItemHandle{Key: 2, Value: 2}
-	bn := NewNodeWithOrderedSlice(5, ihs, cmpTest)
+	bn := NewNodeWithOrderedSlice(5, ihs, 2, cmpTest)
 
 	if len(bn.data) != NODE_SIZE {
 		t.Fatalf("It should still have len 32, but instead we got %d", len(bn.data))

@@ -62,7 +62,8 @@ func NewEmptyNode(h int, cmp common.Comparator) *Node {
 }
 
 // NewNodeWithOrderedSlice creates Node with height h, given initial data and common.comparator
-func NewNodeWithOrderedSlice(h int, data []ItemHandle, cmp common.Comparator) *Node {
+func NewNodeWithOrderedSlice(
+	h int, data []ItemHandle, size int, cmp common.Comparator) *Node {
 	n := &Node{
 		mu:        sync.Mutex{},
 		state:     common.ACTIVE,
@@ -72,8 +73,8 @@ func NewNodeWithOrderedSlice(h int, data []ItemHandle, cmp common.Comparator) *N
 		height:    h,
 		nextNodes: make([]*Node, h),
 	}
-	copy(n.data, data)
-	n.dataCount = len(data)
+	copy(n.data, data[:size])
+	n.dataCount = size
 	return n
 }
 
@@ -120,14 +121,12 @@ func (n *Node) GetCount() int {
 //
 // Should only be called when Lock is held, or when no concurrency is guaranteed
 func (n *Node) GetPositionLessThanEqual(key interface{}) int {
-	idx := -1
 	for i := 0; i < n.dataCount; i++ {
 		if n.cmp(key, n.data[i].Key) <= 0 {
-			idx = i
-			break
+			return i
 		}
 	}
-	return idx
+	return -1
 }
 
 // GetPositionGreaterThanEqual returns the position
@@ -135,28 +134,36 @@ func (n *Node) GetPositionLessThanEqual(key interface{}) int {
 //
 // Should only be called when Lock is held, or when no concurrency is guaranteed
 func (n *Node) GetPositionGreaterThanEqual(key interface{}) int {
-	idx := -1
 	for i := 0; i < n.dataCount; i++ {
 		if n.cmp(n.data[i].Key, key) >= 0 {
-			idx = i
-			break
+			return i
 		}
 	}
-	return idx
+	return -1
 }
 
 // GetPositionExact returns the position of the key in the node
 //
 // Should only be called when Lock is held, or when no concurrency is guaranteed
 func (n *Node) GetPositionExact(key interface{}) int {
-	idx := -1
-	for i := 0; i < n.dataCount; i++ {
-		if n.cmp(n.data[i].Key, key) == 0 {
-			idx = i
-			break
+	if n.dataCount == 0 {
+		return -1
+	}
+	low := 0
+	high := n.dataCount - 1
+	for high >= low {
+		mid := low + ((high - low) / 2)
+		cmp := n.cmp(n.data[mid].Key, key)
+		if cmp == 0 {
+			return mid
+		}
+		if cmp == -1 { // cause key in node checked first
+			low = mid + 1
+		} else {
+			high = mid - 1
 		}
 	}
-	return idx
+	return -1
 }
 
 // Insert ih into current node.
@@ -344,7 +351,7 @@ func (n *Node) ScanStrictlyLessThan(key interface{}, fn func(ItemHandle)) {
 // Should only be called either when Lock is held, or when no concurrency is guaranteed
 func (n *Node) SplitIntoNewNode(h int) *Node {
 	posToSplit := n.dataCount / 2
-	newNode := NewNodeWithOrderedSlice(h, n.data[posToSplit:], n.cmp)
+	newNode := NewNodeWithOrderedSlice(h, n.data[posToSplit:], n.dataCount-posToSplit, n.cmp)
 	n.dataCount = posToSplit
 	return newNode
 }

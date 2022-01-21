@@ -7,7 +7,7 @@ Downsides are :
 * no backward check/scan, only one way (like most skiplist implementations)
 * kinda slow compared to concurrent b-tree, and much slower than ART or Masstree, also like typical skiplist
 
-With simple bench tests, current implementations is super slow (batch size ~1000 only get 200K write/s, most time spent on `CheckKeyStrictlyLessThanMin`, like 60%++ with NODE_SIZE=32, and both `CheckKeyStrictlyLessThanMin` and GC on NODE_SIZE=16). And this is still with exclusive version. Unless I find good way to optimize, the concurrent ver prototype won't get tried
+With simple bench tests, current implementations is super slow (batch size ~1000 only get at most 200K write/s, most time spent on `connectUntil`, via pprof). And this is still with exclusive version. Unless I find good way to optimize, the concurrent ver prototype won't get tried
 
 ## todo
 

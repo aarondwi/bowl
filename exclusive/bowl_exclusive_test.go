@@ -218,31 +218,32 @@ func BenchmarkBowlExclusiveWrite(b *testing.B) {
 	// update and delete both also search, but will not result in reconnection scheme
 	b.StopTimer()
 	bowl := NewBOWL(cmpTest)
-	ch := make(chan []node.ItemHandle, 4096)
-	go func() {
-		rnd := rand.New(rand.NewSource(rand.Int63()))
-		for {
-			data := make([]node.ItemHandle, 0, 1024)
-			prev := 0
-			for j := 0; j < 1024; j++ {
-				val := prev + rnd.Intn(65536) + 1
-				data = append(data, node.ItemHandle{Key: val, Value: val})
-				prev = val
-			}
-			ch <- data
+	ch := make(chan []node.ItemHandle, 1000)
+	rnd := rand.New(rand.NewSource(rand.Int63()))
+	for i := 0; i < 1000; i++ {
+		data := make([]node.ItemHandle, 0, 1024)
+		prev := 0
+		for j := 0; j < 1024; j++ {
+			val := prev + rnd.Intn(65536) + 1
+			data = append(data, node.ItemHandle{
+				Key: val, Value: val})
+			prev = val
 		}
-	}()
-	time.Sleep(5 * time.Second) // give time to buffer
+		ch <- data
+	}
 
+	b.N = 1000
 	b.StartTimer()
+
 	for i := 0; i < b.N; i++ {
 		data := <-ch
-		errs := bowl.Insert(data)
-		for _, err := range errs {
-			if err != nil && err != node.ErrKeyAlreadyExist {
-				b.Fatal(err)
-			}
-		}
+		bowl.Insert(data)
+		// errs := bowl.Insert(data)
+		// for _, err := range errs {
+		// 	if err != nil && err != node.ErrKeyAlreadyExist {
+		// 		b.Fatal(err)
+		// 	}
+		// }
 	}
 }
 
