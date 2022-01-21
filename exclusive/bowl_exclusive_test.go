@@ -217,6 +217,7 @@ func BenchmarkBowlExclusiveWrite(b *testing.B) {
 	//
 	// update and delete both also search, but will not result in reconnection scheme
 	b.StopTimer()
+	bowl := NewBOWL(cmpTest)
 	ch := make(chan []node.ItemHandle, 4096)
 	go func() {
 		rnd := rand.New(rand.NewSource(rand.Int63()))
@@ -231,8 +232,8 @@ func BenchmarkBowlExclusiveWrite(b *testing.B) {
 			ch <- data
 		}
 	}()
-	time.Sleep(5)
-	bowl := NewBOWL(cmpTest)
+	time.Sleep(5 * time.Second) // give time to buffer
+
 	b.StartTimer()
 	for i := 0; i < b.N; i++ {
 		data := <-ch
@@ -247,8 +248,10 @@ func BenchmarkBowlExclusiveWrite(b *testing.B) {
 
 func BenchmarkBowlExclusiveRead(b *testing.B) {
 	b.StopTimer()
-
+	bowl := NewBOWL(cmpTest)
 	chInsert := make(chan []node.ItemHandle, 4096)
+	chRead := make(chan []interface{}, 4096)
+
 	go func() { // for insertion
 		rnd := rand.New(rand.NewSource(rand.Int63()))
 		for i := 0; i < 2048; i++ {
@@ -262,8 +265,7 @@ func BenchmarkBowlExclusiveRead(b *testing.B) {
 			chInsert <- data
 		}
 	}()
-	time.Sleep(5)
-	chRead := make(chan []interface{}, 4096)
+	time.Sleep(1 * time.Millisecond)
 	go func() { // for read benchmark
 		rnd := rand.New(rand.NewSource(rand.Int63()))
 		for {
@@ -277,11 +279,12 @@ func BenchmarkBowlExclusiveRead(b *testing.B) {
 			chRead <- data
 		}
 	}()
-	bowl := NewBOWL(cmpTest)
+	time.Sleep(10 * time.Second)
 	for i := 0; i < 2048; i++ {
 		data := <-chInsert
 		bowl.Insert(data)
 	}
+
 	b.StartTimer()
 	for i := 0; i < b.N; i++ {
 		data := <-chRead
