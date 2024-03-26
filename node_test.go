@@ -1,23 +1,11 @@
-package node
+package bowl
 
 import (
 	"testing"
 )
 
-func cmpTest(a, b interface{}) int {
-	if a.(int) == b.(int) {
-		return 0
-	}
-	if a.(int) < b.(int) {
-		return -1
-	}
-	return 1
-}
-
 func TestBOWLNode(t *testing.T) {
 	bn := NewEmptyNode(16, cmpTest)
-	bn.WriteLock()
-	defer bn.Unlock()
 
 	ok := bn.Exist(1)
 	if ok {
@@ -34,12 +22,12 @@ func TestBOWLNode(t *testing.T) {
 		t.Fatalf("err should be errNodeIsEmpty, but instead we got %v", err)
 	}
 
-	err = bn.Insert(ItemHandle{Key: 1, Value: 1})
+	err = bn.Insert(Item{Key: 1, Value: 1})
 	if err != nil {
 		t.Fatalf("It should be okay to insert, but instead we got %v", err)
 	}
 	for i := 32; i > 1; i-- {
-		err = bn.Insert(ItemHandle{Key: i, Value: i})
+		err = bn.Insert(Item{Key: i, Value: i})
 		if err != nil {
 			t.Fatalf("It should be okay to insert, but instead we got %v", err)
 		}
@@ -50,7 +38,7 @@ func TestBOWLNode(t *testing.T) {
 		t.Fatalf("We should have 32 data, but instead we only have %d", cnt)
 	}
 
-	err = bn.Insert(ItemHandle{Key: 250})
+	err = bn.Insert(Item{Key: 250})
 	if err == nil || err != ErrNodeIsFull {
 		t.Fatalf("err should be errNodeIsFull, but instead we got %v", err)
 	}
@@ -104,7 +92,7 @@ func TestBOWLNode(t *testing.T) {
 		t.Fatal("It should be false, cause current max is key `32`")
 	}
 
-	err = bn.Update(ItemHandle{Key: 16, Value: 50})
+	err = bn.Update(Item{Key: 16, Value: 50})
 	if err != nil {
 		t.Fatalf("It should be okay to update value of key 16, cause it exists, but instead we got %v", err)
 	}
@@ -113,7 +101,7 @@ func TestBOWLNode(t *testing.T) {
 		t.Fatalf("It should be 50 after we updated it, but instead we got %d", val.(int))
 	}
 
-	err = bn.Update(ItemHandle{Key: 34, Value: 34})
+	err = bn.Update(Item{Key: 34, Value: 34})
 	if err == nil || err != ErrDataNotFound {
 		t.Fatalf("updating 34 should fail with errDataNotFound, but instead we got %v", err)
 	}
@@ -136,12 +124,12 @@ func TestBOWLNode(t *testing.T) {
 		t.Fatalf("We should now only have 31 data, cause 17 already got deleted, but instead we only have %d", cnt)
 	}
 
-	err = bn.Insert(ItemHandle{Key: 11})
+	err = bn.Insert(Item{Key: 11})
 	if err == nil || err != ErrKeyAlreadyExist {
 		t.Fatalf("err should be ErrKeyAlreadyExist, but instead we got %v", err)
 	}
 
-	err = bn.Insert(ItemHandle{Key: 38, Value: 38})
+	err = bn.Insert(Item{Key: 38, Value: 38})
 	if err != nil {
 		t.Fatalf("It should be inserted cause we have slot, but instead we got %v", err)
 	}
@@ -165,17 +153,14 @@ func TestBOWLNode(t *testing.T) {
 }
 
 func TestBOWLNewOrderedNodeAndSplitting(t *testing.T) {
-	ihs := make([]ItemHandle, 2)
-	ihs[0] = ItemHandle{Key: 1, Value: 1}
-	ihs[1] = ItemHandle{Key: 2, Value: 2}
+	ihs := make([]Item, 2)
+	ihs[0] = Item{Key: 1, Value: 1}
+	ihs[1] = Item{Key: 2, Value: 2}
 	bn := NewNodeWithOrderedSlice(5, ihs, 2, cmpTest)
 
 	if len(bn.data) != NODE_SIZE {
 		t.Fatalf("It should still have len 32, but instead we got %d", len(bn.data))
 	}
-
-	bn.WriteLock()
-	defer bn.Unlock()
 
 	if bn.dataCount != 2 {
 		t.Fatalf("It should only have 2 data, but instead we got %d", bn.dataCount)
@@ -202,9 +187,6 @@ func TestBOWLNewOrderedNodeAndSplitting(t *testing.T) {
 func TestBOWLNodeMarkRemoval(t *testing.T) {
 	bn := NewEmptyNode(5, cmpTest)
 
-	bn.WriteLock()
-	defer bn.Unlock()
-
 	bn.MarkRemoval()
 	if !bn.MarkedRemoval() {
 		t.Fatalf("Should be already MARKED_REMOVAL, but it is not")
@@ -214,8 +196,6 @@ func TestBOWLNodeMarkRemoval(t *testing.T) {
 func TestBOWLNodeConnect(t *testing.T) {
 	bn := NewEmptyNode(5, cmpTest)  // 0-4
 	bn2 := NewEmptyNode(4, cmpTest) // 0-3
-	bn.WriteLock()
-	defer bn.Unlock()
 
 	h := bn.GetHeight()
 	if h != 5 {
@@ -260,15 +240,13 @@ func TestBOWLNodeConnect(t *testing.T) {
 
 func TestBOWLNodeScan(t *testing.T) {
 	bn := NewEmptyNode(16, cmpTest)
-	bn.WriteLock()
-	defer bn.Unlock()
 
 	for i := 30; i > 0; i-- {
-		bn.Insert(ItemHandle{Key: i, Value: i})
+		bn.Insert(Item{Key: i, Value: i})
 	}
 
 	scanAllSum := 0
-	bn.ScanAll(func(ih ItemHandle) {
+	bn.ScanAll(func(ih Item) {
 		scanAllSum += ih.Key.(int)
 	})
 	if scanAllSum != 465 {
@@ -276,20 +254,20 @@ func TestBOWLNodeScan(t *testing.T) {
 	}
 
 	scanGteSum := 0
-	bn.ScanGreaterThanEqual(31, func(ih ItemHandle) {
+	bn.ScanGreaterThanEqual(31, func(ih Item) {
 		scanGteSum += ih.Key.(int)
 	})
 	if scanGteSum != 0 {
 		t.Fatalf("It should be 0, but instead we got %d", scanGteSum)
 	}
-	bn.ScanGreaterThanEqual(15, func(ih ItemHandle) {
+	bn.ScanGreaterThanEqual(15, func(ih Item) {
 		scanGteSum += ih.Key.(int)
 	})
 	if scanGteSum != 360 {
 		t.Fatalf("It should be 360, but instead we got %d", scanGteSum)
 	}
 	scanGteSum = 0
-	bn.ScanGreaterThanEqual(-1, func(ih ItemHandle) {
+	bn.ScanGreaterThanEqual(-1, func(ih Item) {
 		scanGteSum += ih.Key.(int)
 	})
 	if scanGteSum != 465 {
@@ -297,20 +275,20 @@ func TestBOWLNodeScan(t *testing.T) {
 	}
 
 	scanStrictLtSum := 0
-	bn.ScanStrictlyLessThan(36, func(ih ItemHandle) {
+	bn.ScanStrictlyLessThan(36, func(ih Item) {
 		scanStrictLtSum += ih.Key.(int)
 	})
 	if scanStrictLtSum != 465 {
 		t.Fatalf("It should be 465, but instead we got %d", scanStrictLtSum)
 	}
 	scanStrictLtSum = 0
-	bn.ScanStrictlyLessThan(1, func(ih ItemHandle) {
+	bn.ScanStrictlyLessThan(1, func(ih Item) {
 		scanStrictLtSum += ih.Key.(int)
 	})
 	if scanStrictLtSum != 0 {
 		t.Fatalf("It should be 0, but instead we got %d", scanStrictLtSum)
 	}
-	bn.ScanStrictlyLessThan(15, func(ih ItemHandle) {
+	bn.ScanStrictlyLessThan(15, func(ih Item) {
 		scanStrictLtSum += ih.Key.(int)
 	})
 	if scanStrictLtSum != 105 {

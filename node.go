@@ -1,10 +1,7 @@
-package node
+package bowl
 
 import (
 	"errors"
-	"sync"
-
-	"github.com/aarondwi/bowl/common"
 )
 
 const (
@@ -17,18 +14,16 @@ var ErrNodeIsEmpty = errors.New("Node is empty")
 var ErrDataNotFound = errors.New("Given data is not in this node")
 var ErrHeightOutsideRange = errors.New("This node's height is lower than given height")
 
-// ItemHandle wraps key-value pair into single object
+// Item wraps key-value pair into single object
 //
 // Separating key and value into individual interface cause memory usage to go twice (cause 2 pointers instead of one),
 // but this also makes the usage much clearer
-type ItemHandle struct {
+type Item struct {
 	Key   interface{}
 	Value interface{}
 }
 
 // Node holds a slice of at most NODE_SIZE data
-//
-// To be accessed, each node should be lock first before doing anything.
 //
 // For deletion, the node is MARKED_REMOVAL, for now
 //
@@ -39,37 +34,34 @@ type ItemHandle struct {
 // Another note is that I still haven't found good way to enforce data is a sort.Interface.
 // Implementing sort.Interface wouldh have the benefit that the user can easily insert batched, ordered data at once
 type Node struct {
-	mu        sync.Mutex
-	state     common.State
-	cmp       common.Comparator
+	state     State
+	cmp       Comparator
 	dataCount int
-	data      []ItemHandle
+	data      []Item
 	height    int
 	nextNodes []*Node
 }
 
-// NewEmptyNode creates Node with height h and given common.comparator
-func NewEmptyNode(h int, cmp common.Comparator) *Node {
+// NewEmptyNode creates Node with height h and given comparator
+func NewEmptyNode(h int, cmp Comparator) *Node {
 	return &Node{
-		mu:        sync.Mutex{},
-		state:     common.ACTIVE,
+		state:     ACTIVE,
 		cmp:       cmp,
 		dataCount: 0,
-		data:      make([]ItemHandle, NODE_SIZE),
+		data:      make([]Item, NODE_SIZE),
 		height:    h,
 		nextNodes: make([]*Node, h),
 	}
 }
 
-// NewNodeWithOrderedSlice creates Node with height h, given initial data and common.comparator
+// NewNodeWithOrderedSlice creates Node with height h, given initial data and comparator
 func NewNodeWithOrderedSlice(
-	h int, data []ItemHandle, size int, cmp common.Comparator) *Node {
+	h int, data []Item, size int, cmp Comparator) *Node {
 	n := &Node{
-		mu:        sync.Mutex{},
-		state:     common.ACTIVE,
+		state:     ACTIVE,
 		cmp:       cmp,
 		dataCount: 0,
-		data:      make([]ItemHandle, NODE_SIZE),
+		data:      make([]Item, NODE_SIZE),
 		height:    h,
 		nextNodes: make([]*Node, h),
 	}
@@ -85,28 +77,18 @@ func (n *Node) GetHeight() int {
 	return n.height
 }
 
-// Lock this node for change/write
-func (n *Node) WriteLock() {
-	n.mu.Lock()
-}
-
-// Unlock this node
-func (n *Node) Unlock() {
-	n.mu.Unlock()
-}
-
 // MarkRemoval mark this node as REMOVED
 //
 // Should only be called when WriteLock is held, or when no concurrency is guaranteed
 func (n *Node) MarkRemoval() {
-	n.state = common.MARKED_REMOVED
+	n.state = MARKED_REMOVED
 }
 
 // MarkRemoval returns whether this node is alrady marked-removal
 //
 // Should only be called when Lock is held, or when no concurrency is guaranteed
 func (n *Node) MarkedRemoval() bool {
-	return n.state == common.MARKED_REMOVED
+	return n.state == MARKED_REMOVED
 }
 
 // GetCount returns the number of items in this node
@@ -170,7 +152,7 @@ func (n *Node) GetPositionExact(key interface{}) int {
 // Whether this node is the correct node, is left for the upper layer
 //
 // Should only be called when Lock is held, or when no concurrency is guaranteed
-func (n *Node) Insert(ih ItemHandle) error {
+func (n *Node) Insert(ih Item) error {
 	idx := n.GetPositionExact(ih.Key)
 	if idx != -1 {
 		return ErrKeyAlreadyExist
@@ -208,7 +190,7 @@ func (n *Node) Delete(key interface{}) error {
 // Update the itemHandle for d.Key into d
 //
 // Should only be called when Lock is held, or when no concurrency is guaranteed
-func (n *Node) Update(d ItemHandle) error {
+func (n *Node) Update(d Item) error {
 	if n.dataCount == 0 {
 		return ErrNodeIsEmpty
 	}
@@ -301,7 +283,7 @@ func (n *Node) GetNextNodeAt(atHeight int) (*Node, error) {
 // ScanAll pass each data to fn
 //
 // Should only be called either when Lock is held, or when no concurrency is guaranteed
-func (n *Node) ScanAll(fn func(ItemHandle)) {
+func (n *Node) ScanAll(fn func(Item)) {
 	for i := 0; i < n.GetCount(); i++ {
 		fn(n.data[i])
 	}
@@ -310,7 +292,7 @@ func (n *Node) ScanAll(fn func(ItemHandle)) {
 // ScanGreaterThanEqual pass each data greater than `key` to fn
 //
 // Should only be called either when Lock is held, or when no concurrency is guaranteed
-func (n *Node) ScanGreaterThanEqual(key interface{}, fn func(ItemHandle)) {
+func (n *Node) ScanGreaterThanEqual(key interface{}, fn func(Item)) {
 	ok, _ := n.CheckKeyStrictlyLessThanMax(key)
 	if !ok {
 		return
@@ -329,7 +311,7 @@ func (n *Node) ScanGreaterThanEqual(key interface{}, fn func(ItemHandle)) {
 // ScanStrictlyLessThan pass each data strictly less than `key` to fn
 //
 // Should only be called either when Lock is held, or when no concurrency is guaranteed
-func (n *Node) ScanStrictlyLessThan(key interface{}, fn func(ItemHandle)) {
+func (n *Node) ScanStrictlyLessThan(key interface{}, fn func(Item)) {
 	ok, _ := n.CheckKeyStrictlyLessThanMin(key)
 	if ok {
 		return

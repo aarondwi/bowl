@@ -1,18 +1,15 @@
-package exclusive
+package bowl
 
 import (
 	"fmt"
 	"sync"
-
-	"github.com/aarondwi/bowl/common"
-	"github.com/aarondwi/bowl/node"
 )
 
 const (
 	MAX_HEIGHT int = 32
 )
 
-// BowlExclusive is an unrolled skip list where every operation grabs single mutex,
+// Bowl is an unrolled skip list where every operation grabs single mutex,
 // reducing concurrency possibility, but gain simplicity of development,
 // as the API can be set to be totally one-pass, even on reconnections
 //
@@ -20,11 +17,11 @@ const (
 // it makes the implementation uniform with the others.
 //
 // It has `STRICT SERIALIZABLE` isolation level, as everything goes through a single mutex
-type BowlExclusive struct {
+type Bowl struct {
 	sync.Mutex
-	head *node.Node
+	head *Node
 	ch   <-chan int
-	cmp  common.Comparator
+	cmp  Comparator
 
 	// this variables would hold all the latest pointing nodes for all height
 	// the goal is not to scan from the beginning just to connect pointers on any new nodes
@@ -32,26 +29,26 @@ type BowlExclusive struct {
 	// this is only used for Insert
 	// we update this value on any traversals
 	// but can safely ignore them for any other operations
-	latestPointingNodes []*node.Node
+	latestPointingNodes []*Node
 }
 
-// NewBOWL creates our new empty BOWL, with given common.Comparator
-func NewBOWL(cmp common.Comparator) *BowlExclusive {
+// NewBOWL creates our new empty BOWL, with given Comparator
+func NewBOWL(cmp Comparator) *Bowl {
 	// empty node for head, so can skip logic for removing head if empty
-	head := node.NewEmptyNode(MAX_HEIGHT, cmp)
-	ch := common.RandomLevelGenerator(MAX_HEIGHT)
-	latestPointingNodes := make([]*node.Node, MAX_HEIGHT)
+	head := NewEmptyNode(MAX_HEIGHT, cmp)
+	ch := RandomLevelGenerator(MAX_HEIGHT)
+	latestPointingNodes := make([]*Node, MAX_HEIGHT)
 
-	return &BowlExclusive{head: head, ch: ch, cmp: cmp, latestPointingNodes: latestPointingNodes}
+	return &Bowl{head: head, ch: ch, cmp: cmp, latestPointingNodes: latestPointingNodes}
 }
 
-func (b *BowlExclusive) resetLatestPointingNodes() {
+func (b *Bowl) resetLatestPointingNodes() {
 	for i := 0; i < MAX_HEIGHT; i++ {
 		b.latestPointingNodes[i] = b.head
 	}
 }
 
-func (b *BowlExclusive) setLatestPointingNodes(n *node.Node) {
+func (b *Bowl) setLatestPointingNodes(n *Node) {
 	for i := 0; i < n.GetHeight(); i++ {
 		b.latestPointingNodes[i] = n
 	}
@@ -60,7 +57,7 @@ func (b *BowlExclusive) setLatestPointingNodes(n *node.Node) {
 // Get returns all values for the given keys
 //
 // Note that keys should already be ascending-sorted, or else the result is NOT guaranteed
-func (b *BowlExclusive) Get(keys []interface{}) []interface{} {
+func (b *Bowl) Get(keys []interface{}) []interface{} {
 	result := make([]interface{}, len(keys))
 
 	b.Lock()
@@ -79,7 +76,7 @@ func (b *BowlExclusive) Get(keys []interface{}) []interface{} {
 // Update updates ih[i].Value when mathing ih[i].Key found
 //
 // Note that keys should already be ascending-sorted, or else the result is NOT guaranteed
-func (b *BowlExclusive) Update(ihs []node.ItemHandle) []error {
+func (b *Bowl) Update(ihs []Item) []error {
 	errs := make([]error, len(ihs))
 
 	b.Lock()
@@ -96,7 +93,7 @@ func (b *BowlExclusive) Update(ihs []node.ItemHandle) []error {
 // Delete removes all matching keys
 //
 // Note that keys should already be ascending-sorted, or else the result is NOT guaranteed
-func (b *BowlExclusive) Delete(keys []interface{}) []error {
+func (b *Bowl) Delete(keys []interface{}) []error {
 	errs := make([]error, len(keys))
 
 	b.Lock()
@@ -114,8 +111,8 @@ func (b *BowlExclusive) Delete(keys []interface{}) []error {
 	return errs
 }
 
-func (b *BowlExclusive) insertFastPathConnectNewNodeFromCurrent(
-	currentNode *node.Node, newNode *node.Node, height int) {
+func (b *Bowl) insertFastPathConnectNewNodeFromCurrent(
+	currentNode *Node, newNode *Node, height int) {
 	for j := 0; j < height; j++ {
 		n, _ := currentNode.GetNextNodeAt(j)
 		newNode.ConnectNode(j, n)
@@ -123,8 +120,8 @@ func (b *BowlExclusive) insertFastPathConnectNewNodeFromCurrent(
 	}
 }
 
-func (b *BowlExclusive) connectUntil(
-	targetNode *node.Node, fromHeight, toHeight int) {
+func (b *Bowl) connectUntil(
+	targetNode *Node, fromHeight, toHeight int) {
 	for h := fromHeight; h >= toHeight; h-- {
 		err := b.latestPointingNodes[h].ConnectNode(h, targetNode)
 		if err != nil {
@@ -136,7 +133,7 @@ func (b *BowlExclusive) connectUntil(
 // Insert returns all values for the given keys
 //
 // Note that keys should already be ascending-sorted, or else the result is NOT guaranteed
-func (b *BowlExclusive) Insert(ihs []node.ItemHandle) []error {
+func (b *Bowl) Insert(ihs []Item) []error {
 	errs := make([]error, len(ihs))
 
 	b.Lock()
@@ -148,7 +145,7 @@ func (b *BowlExclusive) Insert(ihs []node.ItemHandle) []error {
 	for i, ih := range ihs {
 		currentNode = b.getCorrectNodeFromItemHandle(ih, currentNode)
 		err := currentNode.Insert(ih)
-		if err != nil && err == node.ErrNodeIsFull {
+		if err != nil && err == ErrNodeIsFull {
 			newHeight := <-b.ch
 			newNode := currentNode.SplitIntoNewNode(newHeight)
 
@@ -178,8 +175,8 @@ func (b *BowlExclusive) Insert(ihs []node.ItemHandle) []error {
 	return errs
 }
 
-func (b *BowlExclusive) scanNextNodeNotMarkedRemoval(
-	prev, next *node.Node) (bool, *node.Node) {
+func (b *Bowl) scanNextNodeNotMarkedRemoval(
+	prev, next *Node) (bool, *Node) {
 	for next.MarkedRemoval() {
 		afterNext, _ := next.GetNextNodeAt(0)
 		if afterNext == nil {
@@ -192,8 +189,8 @@ func (b *BowlExclusive) scanNextNodeNotMarkedRemoval(
 	return true, next
 }
 
-func (b *BowlExclusive) getNextNodeAtHeightNotMarkedRemoval(
-	h int, prev, next *node.Node) (bool, *node.Node) {
+func (b *Bowl) getNextNodeAtHeightNotMarkedRemoval(
+	h int, prev, next *Node) (bool, *Node) {
 	atLeast1NotMarkedRemovalAtThisHeight := true
 	for next.MarkedRemoval() {
 		afterNext, _ := next.GetNextNodeAt(h)
@@ -208,7 +205,7 @@ func (b *BowlExclusive) getNextNodeAtHeightNotMarkedRemoval(
 	return atLeast1NotMarkedRemovalAtThisHeight, next
 }
 
-func (b *BowlExclusive) getValidNodeToStartScan() *node.Node {
+func (b *Bowl) getValidNodeToStartScan() *Node {
 	node, _ := b.head.GetNextNodeAt(0)
 	if node == nil {
 		return nil
@@ -221,7 +218,7 @@ func (b *BowlExclusive) getValidNodeToStartScan() *node.Node {
 }
 
 // ScanAll pass each data to fn
-func (b *BowlExclusive) ScanAll(fn func(node.ItemHandle)) {
+func (b *Bowl) ScanAll(fn func(Item)) {
 	b.Lock()
 	defer b.Unlock()
 
@@ -245,8 +242,8 @@ func (b *BowlExclusive) ScanAll(fn func(node.ItemHandle)) {
 }
 
 // ScanGreaterThanEqual pass each data greater than `key` to fn
-func (b *BowlExclusive) ScanGreaterThanEqual(
-	key interface{}, fn func(node.ItemHandle)) {
+func (b *Bowl) ScanGreaterThanEqual(
+	key interface{}, fn func(Item)) {
 	b.Lock()
 	defer b.Unlock()
 
@@ -268,8 +265,8 @@ func (b *BowlExclusive) ScanGreaterThanEqual(
 }
 
 // ScanGreaterThanEqual pass each data until `key` to fn
-func (b *BowlExclusive) ScanStrictlyLessThan(
-	key interface{}, fn func(node.ItemHandle)) {
+func (b *Bowl) ScanStrictlyLessThan(
+	key interface{}, fn func(Item)) {
 	b.Lock()
 	defer b.Unlock()
 
@@ -303,8 +300,8 @@ func (b *BowlExclusive) ScanStrictlyLessThan(
 }
 
 // ScanRange pass each data between fromKey <= data <= toKey
-func (b *BowlExclusive) ScanRange(
-	fromKey interface{}, toKey interface{}, fn func(node.ItemHandle)) {
+func (b *Bowl) ScanRange(
+	fromKey interface{}, toKey interface{}, fn func(Item)) {
 	b.Lock()
 	defer b.Unlock()
 
@@ -344,7 +341,7 @@ func (b *BowlExclusive) ScanRange(
 // there will always be at least one data node beside head
 //
 // The node returned will never be nil, and is already locked
-func (b *BowlExclusive) getNextNodeFromHead(key interface{}) *node.Node {
+func (b *Bowl) getNextNodeFromHead(key interface{}) *Node {
 	for h := MAX_HEIGHT - 1; h > 0; {
 		next, _ := b.head.GetNextNodeAt(h)
 		if next == nil {
@@ -372,7 +369,7 @@ func (b *BowlExclusive) getNextNodeFromHead(key interface{}) *node.Node {
 	if n == nil {
 		// meaning this BOWL is empty, create new
 		nextHeight := <-b.ch
-		newNode := node.NewEmptyNode(nextHeight, b.cmp)
+		newNode := NewEmptyNode(nextHeight, b.cmp)
 		for i := 0; i < nextHeight; i++ {
 			b.head.ConnectNode(i, newNode)
 		}
@@ -385,8 +382,8 @@ func (b *BowlExclusive) getNextNodeFromHead(key interface{}) *node.Node {
 // getCorrectNode returns the node that should has the key
 //
 // splitting this function from `getNextNodeFromHead` cause we have some logic skipping on head
-func (b *BowlExclusive) getCorrectNode(
-	key interface{}, currentNode *node.Node) *node.Node {
+func (b *Bowl) getCorrectNode(
+	key interface{}, currentNode *Node) *Node {
 	h := currentNode.GetHeight()
 	for {
 		ok, _ := currentNode.CheckKeyStrictlyLessThanMax(key)
@@ -438,7 +435,7 @@ func (b *BowlExclusive) getCorrectNode(
 // getCorrectNode returns the node that should has the key
 //
 // splitting this function from `getNextNodeFromHead` cause we have some logic skipping on head
-func (b *BowlExclusive) getCorrectNodeFromItemHandle(
-	ih node.ItemHandle, currentNode *node.Node) *node.Node {
+func (b *Bowl) getCorrectNodeFromItemHandle(
+	ih Item, currentNode *Node) *Node {
 	return b.getCorrectNode(ih.Key, currentNode)
 }

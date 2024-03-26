@@ -1,4 +1,4 @@
-package common
+package bowl
 
 type State int32
 

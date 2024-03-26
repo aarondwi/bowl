@@ -1,11 +1,9 @@
-package exclusive
+package bowl
 
 import (
 	"math/rand"
 	"testing"
 	"time"
-
-	"github.com/aarondwi/bowl/node"
 )
 
 func cmpTest(a, b interface{}) int {
@@ -22,16 +20,16 @@ func TestBowlExclusive(t *testing.T) {
 	b := NewBOWL(cmpTest)
 
 	// test insert overlapping
-	insert1 := make([]node.ItemHandle, 0, 100)
+	insert1 := make([]Item, 0, 100)
 	for i := 0; i < 100; i++ {
 		j := 1 + (i * 5)
-		insert1 = append(insert1, node.ItemHandle{Key: j, Value: j})
+		insert1 = append(insert1, Item{Key: j, Value: j})
 	}
-	insert2 := make([]node.ItemHandle, 0, 81)
-	insert2 = append(insert2, node.ItemHandle{Key: 11, Value: 11})
+	insert2 := make([]Item, 0, 81)
+	insert2 = append(insert2, Item{Key: 11, Value: 11})
 	for i := 0; i < 80; i++ {
 		j := 2 + (i * 5)
-		insert2 = append(insert2, node.ItemHandle{Key: j, Value: j})
+		insert2 = append(insert2, Item{Key: j, Value: j})
 	}
 	errs := b.Insert(insert1)
 	for _, err := range errs {
@@ -40,7 +38,7 @@ func TestBowlExclusive(t *testing.T) {
 		}
 	}
 	errs = b.Insert(insert2)
-	if errs[0] == nil || errs[0] != node.ErrKeyAlreadyExist {
+	if errs[0] == nil || errs[0] != ErrKeyAlreadyExist {
 		t.Fatalf("errs[0] should be ErrKeyAlreadyExist, cause it is, but instead we got %v", errs[0])
 	}
 	for _, err := range errs[1:] {
@@ -51,7 +49,7 @@ func TestBowlExclusive(t *testing.T) {
 
 	// ensure all got properly ordered
 	prevVal := 0
-	b.ScanAll(func(ih node.ItemHandle) {
+	b.ScanAll(func(ih Item) {
 		if ih.Key.(int) <= prevVal {
 			t.Fatalf("Should be bigger, but instead we got prevVal: %d and ih.Key: %d", prevVal, ih.Key.(int))
 		}
@@ -59,11 +57,11 @@ func TestBowlExclusive(t *testing.T) {
 	})
 
 	// test update/delete + recheck existence
-	update1 := make([]node.ItemHandle, 0, 4)
-	update1 = append(update1, node.ItemHandle{Key: 6, Value: 1000})
-	update1 = append(update1, node.ItemHandle{Key: 14, Value: 1000})
-	update1 = append(update1, node.ItemHandle{Key: 17, Value: 1000})
-	update1 = append(update1, node.ItemHandle{Key: 98, Value: 2000})
+	update1 := make([]Item, 0, 4)
+	update1 = append(update1, Item{Key: 6, Value: 1000})
+	update1 = append(update1, Item{Key: 14, Value: 1000})
+	update1 = append(update1, Item{Key: 17, Value: 1000})
+	update1 = append(update1, Item{Key: 98, Value: 2000})
 
 	errs = b.Update(update1)
 	if errs[0] != nil || errs[2] != nil {
@@ -71,7 +69,7 @@ func TestBowlExclusive(t *testing.T) {
 			errs[0], errs[2])
 	}
 	if errs[1] == nil || errs[3] == nil ||
-		errs[1] != node.ErrDataNotFound || errs[3] != node.ErrDataNotFound {
+		errs[1] != ErrDataNotFound || errs[3] != ErrDataNotFound {
 		t.Fatalf("Pos 1 and 3 shouldn't be nil, and be ErrDataNotFound, but instead we got `%v` and `%v`",
 			errs[1], errs[3])
 	}
@@ -91,8 +89,8 @@ func TestBowlExclusive(t *testing.T) {
 	}
 	if errs[0] == nil || errs[2] == nil ||
 		errs[4] == nil || errs[5] == nil ||
-		errs[0] != node.ErrDataNotFound || errs[2] != node.ErrDataNotFound ||
-		errs[4] != node.ErrDataNotFound || errs[5] != node.ErrDataNotFound {
+		errs[0] != ErrDataNotFound || errs[2] != ErrDataNotFound ||
+		errs[4] != ErrDataNotFound || errs[5] != ErrDataNotFound {
 		t.Fatalf("Pos 0, 2, 4, and 5 shouldn't be nil and be ErrDataNotFound, but instead we got %v, %v, and %v",
 			errs[0], errs[2], errs[4])
 	}
@@ -137,7 +135,7 @@ func TestBowlExclusive(t *testing.T) {
 	// test range
 	rangeSum := 0
 	toDeleteLater := make([]interface{}, 0, 40)
-	b.ScanRange(301, 400, func(ih node.ItemHandle) {
+	b.ScanRange(301, 400, func(ih Item) {
 		rangeSum += ih.Key.(int)
 		toDeleteLater = append(toDeleteLater, ih.Key)
 	})
@@ -153,7 +151,7 @@ func TestBowlExclusive(t *testing.T) {
 			t.Fatalf("Should be nil cause all keys to delete exist,, but instead at iter %d we got %v", i, err)
 		}
 	}
-	b.ScanRange(301, 400, func(ih node.ItemHandle) {
+	b.ScanRange(301, 400, func(ih Item) {
 		rangeSum += ih.Key.(int)
 	})
 	if rangeSum != 0 {
@@ -188,22 +186,22 @@ func TestBowlExclusive(t *testing.T) {
 	}
 
 	gteSum1 := 0
-	b.ScanGreaterThanEqual(401, func(ih node.ItemHandle) {
+	b.ScanGreaterThanEqual(401, func(ih Item) {
 		gteSum1 += ih.Value.(int)
 	})
 	gteSum2 := 0
-	b.ScanGreaterThanEqual(400, func(ih node.ItemHandle) {
+	b.ScanGreaterThanEqual(400, func(ih Item) {
 		gteSum2 += ih.Value.(int)
 	})
 	if (gteSum1 != gteSum2) || gteSum1 != 8970 {
 		t.Fatalf("Both should be the same, and is 8970, but instead we got %d and %d", gteSum1, gteSum2)
 	}
 	ltSum1 := 0
-	b.ScanStrictlyLessThan(100, func(ih node.ItemHandle) {
+	b.ScanStrictlyLessThan(100, func(ih Item) {
 		ltSum1 += ih.Value.(int)
 	})
 	ltSum2 := 0
-	b.ScanStrictlyLessThan(99, func(ih node.ItemHandle) {
+	b.ScanStrictlyLessThan(99, func(ih Item) {
 		ltSum2 += ih.Value.(int)
 	})
 	if (ltSum1 != ltSum2) || ltSum1 != 3839 {
@@ -219,14 +217,14 @@ func BenchmarkBowlExclusiveWrite(b *testing.B) {
 	b.Logf("Starting to prepare the payloads.....")
 	b.StopTimer()
 	bowl := NewBOWL(cmpTest)
-	ch := make(chan []node.ItemHandle, 1024)
+	ch := make(chan []Item, 1024)
 	rnd := rand.New(rand.NewSource(rand.Int63()))
 	for i := 0; i < 1024; i++ {
-		data := make([]node.ItemHandle, 0, 1024)
+		data := make([]Item, 0, 1024)
 		prev := 0
 		for j := 0; j < 1024; j++ {
 			val := prev + rnd.Intn(65536) + 1
-			data = append(data, node.ItemHandle{
+			data = append(data, Item{
 				Key: val, Value: val})
 			prev = val
 		}
@@ -241,7 +239,7 @@ func BenchmarkBowlExclusiveWrite(b *testing.B) {
 		data := <-ch
 		errs := bowl.Insert(data)
 		for _, err := range errs {
-			if err != nil && err != node.ErrKeyAlreadyExist {
+			if err != nil && err != ErrKeyAlreadyExist {
 				b.Fatal(err)
 			}
 		}
@@ -252,7 +250,7 @@ func BenchmarkBowlExclusiveWrite(b *testing.B) {
 	// validate all ordered just fine
 	b.Logf("Start validating......")
 	prevVal := 0
-	bowl.ScanAll(func(ih node.ItemHandle) {
+	bowl.ScanAll(func(ih Item) {
 		if ih.Key.(int) <= prevVal {
 			b.Fatalf("Should be bigger, but instead we got prevVal: %d and ih.Key: %d", prevVal, ih.Key.(int))
 		}
@@ -264,17 +262,17 @@ func BenchmarkBowlExclusiveWrite(b *testing.B) {
 func BenchmarkBowlExclusiveRead(b *testing.B) {
 	b.StopTimer()
 	bowl := NewBOWL(cmpTest)
-	chInsert := make(chan []node.ItemHandle, 4096)
+	chInsert := make(chan []Item, 4096)
 	chRead := make(chan []interface{}, 4096)
 
 	go func() { // for insertion
 		rnd := rand.New(rand.NewSource(rand.Int63()))
 		for i := 0; i < 1024; i++ {
-			data := make([]node.ItemHandle, 0, 1024)
+			data := make([]Item, 0, 1024)
 			prev := 0
 			for j := 0; j < 1024; j++ {
 				val := prev + rnd.Intn(65536) + 1
-				data = append(data, node.ItemHandle{Key: val, Value: val})
+				data = append(data, Item{Key: val, Value: val})
 				prev = val
 			}
 			chInsert <- data

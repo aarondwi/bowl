@@ -5,7 +5,7 @@ An experimental skip list prototype, which is a unrolled-skip-list, optimized fo
 Won't do any other low level optimizations. Just to see how good this optimization is
 
 # benchmark
-With interface (not moved to generics yet), ordered writes reaching 600K/s.
+With interface (not moved to generics yet), ordered writes reaching 650K/s.
 
 ## todo
 
