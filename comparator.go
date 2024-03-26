@@ -9,4 +9,4 @@ package bowl
 // 3. 1 if a > b
 //
 // and NOT anything else
-type Comparator func(a, b interface{}) int
+type Comparator[c comparable] func(a, b c) int

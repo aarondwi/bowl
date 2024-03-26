@@ -5,7 +5,7 @@ import (
 )
 
 const (
-	NODE_SIZE int = 32
+	NODE_SIZE int = 256
 )
 
 var ErrKeyAlreadyExist = errors.New("Given key is already exist")
@@ -15,12 +15,9 @@ var ErrDataNotFound = errors.New("Given data is not in this node")
 var ErrHeightOutsideRange = errors.New("This node's height is lower than given height")
 
 // Item wraps key-value pair into single object
-//
-// Separating key and value into individual interface cause memory usage to go twice (cause 2 pointers instead of one),
-// but this also makes the usage much clearer
-type Item struct {
-	Key   interface{}
-	Value interface{}
+type Item[k comparable, v any] struct {
+	Key   k
+	Value v
 }
 
 // Node holds a slice of at most NODE_SIZE data
@@ -33,37 +30,37 @@ type Item struct {
 //
 // Another note is that I still haven't found good way to enforce data is a sort.Interface.
 // Implementing sort.Interface wouldh have the benefit that the user can easily insert batched, ordered data at once
-type Node struct {
+type Node[k comparable, v any] struct {
 	state     State
-	cmp       Comparator
+	cmp       Comparator[k]
 	dataCount int
-	data      []Item
+	data      []Item[k, v]
 	height    int
-	nextNodes []*Node
+	nextNodes []*Node[k, v]
 }
 
 // NewEmptyNode creates Node with height h and given comparator
-func NewEmptyNode(h int, cmp Comparator) *Node {
-	return &Node{
+func NewEmptyNode[k comparable, v any](h int, cmp Comparator[k]) *Node[k, v] {
+	return &Node[k, v]{
 		state:     ACTIVE,
 		cmp:       cmp,
 		dataCount: 0,
-		data:      make([]Item, NODE_SIZE),
+		data:      make([]Item[k, v], NODE_SIZE),
 		height:    h,
-		nextNodes: make([]*Node, h),
+		nextNodes: make([]*Node[k, v], h),
 	}
 }
 
 // NewNodeWithOrderedSlice creates Node with height h, given initial data and comparator
-func NewNodeWithOrderedSlice(
-	h int, data []Item, size int, cmp Comparator) *Node {
-	n := &Node{
+func NewNodeWithOrderedSlice[k comparable, v any](
+	h int, data []Item[k, v], size int, cmp Comparator[k]) *Node[k, v] {
+	n := &Node[k, v]{
 		state:     ACTIVE,
 		cmp:       cmp,
 		dataCount: 0,
-		data:      make([]Item, NODE_SIZE),
+		data:      make([]Item[k, v], NODE_SIZE),
 		height:    h,
-		nextNodes: make([]*Node, h),
+		nextNodes: make([]*Node[k, v], h),
 	}
 	copy(n.data, data[:size])
 	n.dataCount = size
@@ -73,28 +70,28 @@ func NewNodeWithOrderedSlice(
 // GetHeight returns n.height
 //
 // Should only be called when Lock is held, or when no concurrency is guaranteed
-func (n *Node) GetHeight() int {
+func (n *Node[k, v]) GetHeight() int {
 	return n.height
 }
 
 // MarkRemoval mark this node as REMOVED
 //
 // Should only be called when WriteLock is held, or when no concurrency is guaranteed
-func (n *Node) MarkRemoval() {
+func (n *Node[k, v]) MarkRemoval() {
 	n.state = MARKED_REMOVED
 }
 
 // MarkRemoval returns whether this node is alrady marked-removal
 //
 // Should only be called when Lock is held, or when no concurrency is guaranteed
-func (n *Node) MarkedRemoval() bool {
+func (n *Node[k, v]) MarkedRemoval() bool {
 	return n.state == MARKED_REMOVED
 }
 
 // GetCount returns the number of items in this node
 //
 // Should only be called when Lock is held, or when no concurrency is guaranteed
-func (n *Node) GetCount() int {
+func (n *Node[k, v]) GetCount() int {
 	return n.dataCount
 }
 
@@ -102,7 +99,7 @@ func (n *Node) GetCount() int {
 // less than or equal the given key
 //
 // Should only be called when Lock is held, or when no concurrency is guaranteed
-func (n *Node) GetPositionLessThanEqual(key interface{}) int {
+func (n *Node[k, v]) GetPositionLessThanEqual(key k) int {
 	for i := 0; i < n.dataCount; i++ {
 		if n.cmp(key, n.data[i].Key) <= 0 {
 			return i
@@ -115,7 +112,7 @@ func (n *Node) GetPositionLessThanEqual(key interface{}) int {
 // of at least equal to the given key
 //
 // Should only be called when Lock is held, or when no concurrency is guaranteed
-func (n *Node) GetPositionGreaterThanEqual(key interface{}) int {
+func (n *Node[k, v]) GetPositionGreaterThanEqual(key k) int {
 	for i := 0; i < n.dataCount; i++ {
 		if n.cmp(n.data[i].Key, key) >= 0 {
 			return i
@@ -127,7 +124,7 @@ func (n *Node) GetPositionGreaterThanEqual(key interface{}) int {
 // GetPositionExact returns the position of the key in the node
 //
 // Should only be called when Lock is held, or when no concurrency is guaranteed
-func (n *Node) GetPositionExact(key interface{}) int {
+func (n *Node[k, v]) GetPositionExact(key k) int {
 	if n.dataCount == 0 {
 		return -1
 	}
@@ -152,7 +149,7 @@ func (n *Node) GetPositionExact(key interface{}) int {
 // Whether this node is the correct node, is left for the upper layer
 //
 // Should only be called when Lock is held, or when no concurrency is guaranteed
-func (n *Node) Insert(ih Item) error {
+func (n *Node[k, v]) Insert(ih Item[k, v]) error {
 	idx := n.GetPositionExact(ih.Key)
 	if idx != -1 {
 		return ErrKeyAlreadyExist
@@ -174,7 +171,7 @@ func (n *Node) Insert(ih Item) error {
 // Delete the specified key, if any
 //
 // Should only be called when Lock is held, or when no concurrency is guaranteed
-func (n *Node) Delete(key interface{}) error {
+func (n *Node[k, v]) Delete(key k) error {
 	if n.dataCount == 0 {
 		return ErrNodeIsEmpty
 	}
@@ -190,7 +187,7 @@ func (n *Node) Delete(key interface{}) error {
 // Update the itemHandle for d.Key into d
 //
 // Should only be called when Lock is held, or when no concurrency is guaranteed
-func (n *Node) Update(d Item) error {
+func (n *Node[k, v]) Update(d Item[k, v]) error {
 	if n.dataCount == 0 {
 		return ErrNodeIsEmpty
 	}
@@ -205,13 +202,13 @@ func (n *Node) Update(d Item) error {
 // Get returns the value for the specified key, if any
 //
 // Should only be called when Lock is held, or when no concurrency is guaranteed
-func (n *Node) Get(key interface{}) (interface{}, error) {
+func (n *Node[k, v]) Get(key k, notFoundDefaultValue v) (v, error) {
 	if n.dataCount == 0 {
-		return nil, ErrNodeIsEmpty
+		return notFoundDefaultValue, ErrNodeIsEmpty
 	}
 	idx := n.GetPositionExact(key)
 	if idx == -1 {
-		return nil, ErrDataNotFound
+		return notFoundDefaultValue, ErrDataNotFound
 	}
 	return n.data[idx].Value, nil
 }
@@ -219,7 +216,7 @@ func (n *Node) Get(key interface{}) (interface{}, error) {
 // Exist checks when the given key is in this node
 //
 // Should only be called when Lock is held, or when no concurrency is guaranteed
-func (n *Node) Exist(key interface{}) bool {
+func (n *Node[k, v]) Exist(key k) bool {
 	if n.dataCount == 0 {
 		return false
 	}
@@ -230,7 +227,7 @@ func (n *Node) Exist(key interface{}) bool {
 // CheckKeyStrictlyLessThanMax checks whether key is less than the biggest value in this node
 //
 // Should only be called when Lock is held, or when no concurrency is guaranteed
-func (n *Node) CheckKeyStrictlyLessThanMax(key interface{}) (bool, error) {
+func (n *Node[k, v]) CheckKeyStrictlyLessThanMax(key k) (bool, error) {
 	if n.dataCount == 0 {
 		return false, ErrNodeIsEmpty
 	}
@@ -240,7 +237,7 @@ func (n *Node) CheckKeyStrictlyLessThanMax(key interface{}) (bool, error) {
 // CheckKeyStrictlyLessThanMin checks whether key is less than the smallest value in this node
 //
 // Should only be called when Lock is held, or when no concurrency is guaranteed
-func (n *Node) CheckKeyStrictlyLessThanMin(key interface{}) (bool, error) {
+func (n *Node[k, v]) CheckKeyStrictlyLessThanMin(key k) (bool, error) {
 	if n.dataCount == 0 {
 		return false, ErrNodeIsEmpty
 	}
@@ -250,7 +247,7 @@ func (n *Node) CheckKeyStrictlyLessThanMin(key interface{}) (bool, error) {
 // ConnectNode set nextNodes at height `atHeight` to `next`
 //
 // Should only be called when Lock is held, or when no concurrency is guaranteed
-func (n *Node) ConnectNode(atHeight int, next *Node) error {
+func (n *Node[k, v]) ConnectNode(atHeight int, next *Node[k, v]) error {
 	if atHeight < 0 || atHeight >= n.height {
 		return ErrHeightOutsideRange
 	}
@@ -262,7 +259,7 @@ func (n *Node) ConnectNode(atHeight int, next *Node) error {
 //
 // Should only be called either when Lock is held, or when no concurrency is guaranteed
 // or when already marked for removal
-func (n *Node) DisconnectNode(atHeight int) error {
+func (n *Node[k, v]) DisconnectNode(atHeight int) error {
 	if atHeight < 0 || atHeight >= n.height {
 		return ErrHeightOutsideRange
 	}
@@ -273,7 +270,7 @@ func (n *Node) DisconnectNode(atHeight int) error {
 // GetNextNodeAt returns the next node at the given `atHeight`
 //
 // Should only be called either when Lock is held, or when no concurrency is guaranteed
-func (n *Node) GetNextNodeAt(atHeight int) (*Node, error) {
+func (n *Node[k, v]) GetNextNodeAt(atHeight int) (*Node[k, v], error) {
 	if atHeight < 0 || atHeight >= n.height {
 		return nil, ErrHeightOutsideRange
 	}
@@ -283,7 +280,7 @@ func (n *Node) GetNextNodeAt(atHeight int) (*Node, error) {
 // ScanAll pass each data to fn
 //
 // Should only be called either when Lock is held, or when no concurrency is guaranteed
-func (n *Node) ScanAll(fn func(Item)) {
+func (n *Node[k, v]) ScanAll(fn func(Item[k, v])) {
 	for i := 0; i < n.GetCount(); i++ {
 		fn(n.data[i])
 	}
@@ -292,7 +289,7 @@ func (n *Node) ScanAll(fn func(Item)) {
 // ScanGreaterThanEqual pass each data greater than `key` to fn
 //
 // Should only be called either when Lock is held, or when no concurrency is guaranteed
-func (n *Node) ScanGreaterThanEqual(key interface{}, fn func(Item)) {
+func (n *Node[k, v]) ScanGreaterThanEqual(key k, fn func(Item[k, v])) {
 	ok, _ := n.CheckKeyStrictlyLessThanMax(key)
 	if !ok {
 		return
@@ -311,7 +308,7 @@ func (n *Node) ScanGreaterThanEqual(key interface{}, fn func(Item)) {
 // ScanStrictlyLessThan pass each data strictly less than `key` to fn
 //
 // Should only be called either when Lock is held, or when no concurrency is guaranteed
-func (n *Node) ScanStrictlyLessThan(key interface{}, fn func(Item)) {
+func (n *Node[k, v]) ScanStrictlyLessThan(key k, fn func(Item[k, v])) {
 	ok, _ := n.CheckKeyStrictlyLessThanMin(key)
 	if ok {
 		return
@@ -331,7 +328,7 @@ func (n *Node) ScanStrictlyLessThan(key interface{}, fn func(Item)) {
 // and second half into returned node (may be empty)
 //
 // Should only be called either when Lock is held, or when no concurrency is guaranteed
-func (n *Node) SplitIntoNewNode(h int) *Node {
+func (n *Node[k, v]) SplitIntoNewNode(h int) *Node[k, v] {
 	posToSplit := n.dataCount / 2
 	newNode := NewNodeWithOrderedSlice(h, n.data[posToSplit:], n.dataCount-posToSplit, n.cmp)
 	n.dataCount = posToSplit
@@ -341,9 +338,9 @@ func (n *Node) SplitIntoNewNode(h int) *Node {
 // GetMinKey returns the key at pos 0, if any
 //
 // Should only be called either when Lock is held, or when no concurrency is guaranteed
-func (n *Node) GetMinKey() (interface{}, error) {
+func (n *Node[k, v]) GetMinKey(notFoundDefaultValue k) (k, error) {
 	if n.dataCount == 0 {
-		return nil, ErrNodeIsEmpty
+		return notFoundDefaultValue, ErrNodeIsEmpty
 	}
 	return n.data[0].Key, nil
 }
