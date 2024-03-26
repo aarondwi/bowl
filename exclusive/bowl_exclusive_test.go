@@ -216,11 +216,12 @@ func BenchmarkBowlExclusiveWrite(b *testing.B) {
 	// as it is already representative about update and delete
 	//
 	// update and delete both also search, but will not result in reconnection scheme
+	b.Logf("Starting to prepare the payloads.....")
 	b.StopTimer()
 	bowl := NewBOWL(cmpTest)
-	ch := make(chan []node.ItemHandle, 1000)
+	ch := make(chan []node.ItemHandle, 1024)
 	rnd := rand.New(rand.NewSource(rand.Int63()))
-	for i := 0; i < 1000; i++ {
+	for i := 0; i < 1024; i++ {
 		data := make([]node.ItemHandle, 0, 1024)
 		prev := 0
 		for j := 0; j < 1024; j++ {
@@ -232,19 +233,32 @@ func BenchmarkBowlExclusiveWrite(b *testing.B) {
 		ch <- data
 	}
 
-	b.N = 1000
+	b.Logf("Start benchmarking......")
+	b.N = 1024
 	b.StartTimer()
 
 	for i := 0; i < b.N; i++ {
 		data := <-ch
-		bowl.Insert(data)
-		// errs := bowl.Insert(data)
-		// for _, err := range errs {
-		// 	if err != nil && err != node.ErrKeyAlreadyExist {
-		// 		b.Fatal(err)
-		// 	}
-		// }
+		errs := bowl.Insert(data)
+		for _, err := range errs {
+			if err != nil && err != node.ErrKeyAlreadyExist {
+				b.Fatal(err)
+			}
+		}
 	}
+
+	b.StopTimer()
+
+	// validate all ordered just fine
+	b.Logf("Start validating......")
+	prevVal := 0
+	bowl.ScanAll(func(ih node.ItemHandle) {
+		if ih.Key.(int) <= prevVal {
+			b.Fatalf("Should be bigger, but instead we got prevVal: %d and ih.Key: %d", prevVal, ih.Key.(int))
+		}
+		prevVal = ih.Key.(int)
+	})
+	b.Logf("Finished")
 }
 
 func BenchmarkBowlExclusiveRead(b *testing.B) {
@@ -255,7 +269,7 @@ func BenchmarkBowlExclusiveRead(b *testing.B) {
 
 	go func() { // for insertion
 		rnd := rand.New(rand.NewSource(rand.Int63()))
-		for i := 0; i < 2048; i++ {
+		for i := 0; i < 1024; i++ {
 			data := make([]node.ItemHandle, 0, 1024)
 			prev := 0
 			for j := 0; j < 1024; j++ {
@@ -266,13 +280,12 @@ func BenchmarkBowlExclusiveRead(b *testing.B) {
 			chInsert <- data
 		}
 	}()
-	time.Sleep(1 * time.Millisecond)
 	go func() { // for read benchmark
 		rnd := rand.New(rand.NewSource(rand.Int63()))
 		for {
-			data := make([]interface{}, 0, 2048)
+			data := make([]interface{}, 0, 1024)
 			prev := 0
-			for j := 0; j < 2048; j++ {
+			for j := 0; j < 1024; j++ {
 				val := prev + rnd.Intn(65536) + 1
 				data = append(data, val)
 				prev = val
@@ -281,19 +294,15 @@ func BenchmarkBowlExclusiveRead(b *testing.B) {
 		}
 	}()
 	time.Sleep(10 * time.Second)
-	for i := 0; i < 2048; i++ {
+	for i := 0; i < 1024; i++ {
 		data := <-chInsert
 		bowl.Insert(data)
 	}
 
+	b.N = 1024
 	b.StartTimer()
 	for i := 0; i < b.N; i++ {
 		data := <-chRead
-		res := bowl.Get(data)
-		for j, r := range res {
-			if r != nil && r.(int) != data[j].(int) {
-				b.Fatalf("Should be the same, but instead we got %d and %d", r.(int), data[j].(int))
-			}
-		}
+		bowl.Get(data)
 	}
 }

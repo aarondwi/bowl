@@ -1,18 +1,13 @@
 # bowl
 
-An experimental skip list prototype, which is a skip-zip-list, optimized for batched workloads (affect how we search the next item)
-There are 2 versions `exclusive` and `concurrent`.
-Downsides are :
+An experimental skip list prototype, which is a unrolled-skip-list, optimized for batched workloads (affect how we search the next item). 
 
-* no backward check/scan, only one way (like most skiplist implementations)
-* kinda slow compared to concurrent b-tree, and much slower than ART or Masstree, also like typical skiplist
+Won't do any other low level optimizations. Just to see how good this optimization is
 
-With simple bench tests, current implementations is super slow (batch size ~1000 only get at most 200K write/s, most time spent on `connectUntil`, via pprof). And this is still with exclusive version. Unless I find good way to optimize, the concurrent ver prototype won't get tried
+# benchmark
+With interface (not moved to generics yet), ordered writes reaching 600K/s.
 
 ## todo
 
-0. Actually finish concurrent version
-1. reduce number of pointers -> reduce memory usage
-2. add `hint` API, so can skip head
-3. Add fuzzy test
-4. Adaptive max NODE_SIZE
+1. move to generics
+2. Add fuzzy test

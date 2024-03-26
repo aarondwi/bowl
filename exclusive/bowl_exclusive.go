@@ -12,7 +12,7 @@ const (
 	MAX_HEIGHT int = 32
 )
 
-// BowlExclusive is a BOWL where every operation grabs single mutex,
+// BowlExclusive is an unrolled skip list where every operation grabs single mutex,
 // reducing concurrency possibility, but gain simplicity of development,
 // as the API can be set to be totally one-pass, even on reconnections
 //
@@ -25,15 +25,36 @@ type BowlExclusive struct {
 	head *node.Node
 	ch   <-chan int
 	cmp  common.Comparator
+
+	// this variables would hold all the latest pointing nodes for all height
+	// the goal is not to scan from the beginning just to connect pointers on any new nodes
+	//
+	// this is only used for Insert
+	// we update this value on any traversals
+	// but can safely ignore them for any other operations
+	latestPointingNodes []*node.Node
 }
 
 // NewBOWL creates our new empty BOWL, with given common.Comparator
 func NewBOWL(cmp common.Comparator) *BowlExclusive {
 	// empty node for head, so can skip logic for removing head if empty
-	head := node.NewEmptyNode(32, cmp)
+	head := node.NewEmptyNode(MAX_HEIGHT, cmp)
 	ch := common.RandomLevelGenerator(MAX_HEIGHT)
+	latestPointingNodes := make([]*node.Node, MAX_HEIGHT)
 
-	return &BowlExclusive{head: head, ch: ch, cmp: cmp}
+	return &BowlExclusive{head: head, ch: ch, cmp: cmp, latestPointingNodes: latestPointingNodes}
+}
+
+func (b *BowlExclusive) resetLatestPointingNodes() {
+	for i := 0; i < MAX_HEIGHT; i++ {
+		b.latestPointingNodes[i] = b.head
+	}
+}
+
+func (b *BowlExclusive) setLatestPointingNodes(n *node.Node) {
+	for i := 0; i < n.GetHeight(); i++ {
+		b.latestPointingNodes[i] = n
+	}
 }
 
 // Get returns all values for the given keys
@@ -104,27 +125,10 @@ func (b *BowlExclusive) insertFastPathConnectNewNodeFromCurrent(
 
 func (b *BowlExclusive) connectUntil(
 	targetNode *node.Node, fromHeight, toHeight int) {
-	targetMinKey, _ := targetNode.GetMinKey()
-	currentNode := b.head
 	for h := fromHeight; h >= toHeight; h-- {
-		for {
-			n, _ := currentNode.GetNextNodeAt(h)
-			if n == nil {
-				currentNode.ConnectNode(h, targetNode)
-				break
-			}
-			ok, n := b.getNextNodeAtHeightNotMarkedRemoval(h, currentNode, n)
-			if !ok {
-				currentNode.ConnectNode(h, targetNode)
-				break
-			}
-			ok, _ = n.CheckKeyStrictlyLessThanMin(targetMinKey)
-			if ok {
-				currentNode.ConnectNode(h, targetNode)
-				targetNode.ConnectNode(h, n)
-				break
-			}
-			currentNode = n
+		err := b.latestPointingNodes[h].ConnectNode(h, targetNode)
+		if err != nil {
+			panic(fmt.Sprintf("Should be no error in `connectUntil` function, means something is broken: %v", err))
 		}
 	}
 }
@@ -138,6 +142,7 @@ func (b *BowlExclusive) Insert(ihs []node.ItemHandle) []error {
 	b.Lock()
 	defer b.Unlock()
 
+	b.resetLatestPointingNodes()
 	currentNode := b.getNextNodeFromHead(ihs[0].Key)
 
 	for i, ih := range ihs {
@@ -152,7 +157,7 @@ func (b *BowlExclusive) Insert(ihs []node.ItemHandle) []error {
 				minHeight = currentNode.GetHeight()
 			}
 			b.insertFastPathConnectNewNodeFromCurrent(currentNode, newNode, minHeight)
-
+			b.setLatestPointingNodes(currentNode)
 			if newHeight > currentNode.GetHeight() {
 				b.connectUntil(newNode, newHeight, currentNode.GetHeight())
 			}
@@ -162,6 +167,7 @@ func (b *BowlExclusive) Insert(ihs []node.ItemHandle) []error {
 			} else {
 				err = newNode.Insert(ih)
 				currentNode = newNode
+				b.setLatestPointingNodes(currentNode)
 			}
 			if err != nil {
 				panic(fmt.Sprintf("Should be no error here, means something is broken: %v", err))
@@ -354,6 +360,7 @@ func (b *BowlExclusive) getNextNodeFromHead(key interface{}) *node.Node {
 
 		ok, err := next.CheckKeyStrictlyLessThanMin(key)
 		if err != nil && !ok { // meaning bigger than next min
+			b.setLatestPointingNodes(next)
 			return next
 		}
 		h--
@@ -369,6 +376,7 @@ func (b *BowlExclusive) getNextNodeFromHead(key interface{}) *node.Node {
 		for i := 0; i < nextHeight; i++ {
 			b.head.ConnectNode(i, newNode)
 		}
+		b.setLatestPointingNodes(newNode)
 		return newNode
 	}
 	return n
@@ -383,6 +391,7 @@ func (b *BowlExclusive) getCorrectNode(
 	for {
 		ok, _ := currentNode.CheckKeyStrictlyLessThanMax(key)
 		if ok {
+			b.setLatestPointingNodes(currentNode)
 			return currentNode
 		}
 
@@ -415,6 +424,7 @@ func (b *BowlExclusive) getCorrectNode(
 			}
 
 			currentNode = next
+			b.setLatestPointingNodes(currentNode)
 			break
 		}
 
