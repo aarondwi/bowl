@@ -234,6 +234,16 @@ func (n *Node[k, v]) CheckKeyStrictlyLessThanMax(key k) (bool, error) {
 	return n.cmp(key, n.data[n.dataCount-1].Key) == -1, nil
 }
 
+// CheckKeyStrictlyGreaterThanMax checks whether key is bigger than the biggest value in this node
+//
+// Should only be called when Lock is held, or when no concurrency is guaranteed
+func (n *Node[k, v]) CheckKeyStrictlyGreaterThanMax(key k) (bool, error) {
+	if n.dataCount == 0 {
+		return false, ErrNodeIsEmpty
+	}
+	return n.cmp(key, n.data[n.dataCount-1].Key) == 1, nil
+}
+
 // CheckKeyStrictlyLessThanMin checks whether key is less than the smallest value in this node
 //
 // Should only be called when Lock is held, or when no concurrency is guaranteed
@@ -321,6 +331,33 @@ func (n *Node[k, v]) ScanStrictlyLessThan(key k, fn func(Item[k, v])) {
 	} else {
 		// much bigger than contents
 		n.ScanAll(fn)
+	}
+}
+
+// ScanRange pass each data in between `fromKey` and `toKey`
+//
+// Should only be called either when Lock is held, or when no concurrency is guaranteed
+func (n *Node[k, v]) ScanRange(fromKey, toKey k, fn func(Item[k, v])) {
+	ok, _ := n.CheckKeyStrictlyLessThanMin(toKey)
+	if ok {
+		return
+	}
+	ok, _ = n.CheckKeyStrictlyGreaterThanMax(fromKey)
+	if ok {
+		return
+	}
+
+	fromIdx := n.GetPositionGreaterThanEqual(fromKey)
+	toIdx := n.GetPositionLessThanEqual(toKey)
+
+	if fromIdx == -1 {
+		fromIdx = 0
+	}
+	if toIdx == -1 {
+		toIdx = n.GetCount()
+	}
+	for i := fromIdx; i < toIdx; i++ {
+		fn(n.data[i])
 	}
 }
 

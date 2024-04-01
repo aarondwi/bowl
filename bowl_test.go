@@ -17,7 +17,7 @@ func cmpTest(a int, b int) int {
 	return 1
 }
 
-func TestBowlExclusive(t *testing.T) {
+func TestBowl(t *testing.T) {
 	b := NewBOWL[int, int](cmpTest)
 
 	// test insert overlapping
@@ -138,7 +138,6 @@ func TestBowlExclusive(t *testing.T) {
 		t.Fatalf("All values in range 301-400 should total 13960, but instead we got %d", rangeSum)
 	}
 
-	rangeSum = 0
 	// testing reconnection
 	errs = b.Delete(toDeleteLater)
 	for i, err := range errs {
@@ -146,6 +145,7 @@ func TestBowlExclusive(t *testing.T) {
 			t.Fatalf("Should be nil cause all keys to delete exist,, but instead at iter %d we got %v", i, err)
 		}
 	}
+	rangeSum = 0
 	b.ScanRange(301, 400, func(ih Item[int, int]) {
 		rangeSum += ih.Key
 	})
@@ -198,7 +198,7 @@ func TestBowlExclusive(t *testing.T) {
 	}
 }
 
-func BenchmarkBowlExclusiveWrite(b *testing.B) {
+func BenchmarkBowlWrite(b *testing.B) {
 	// we only test insert
 	// as it is already representative about update and delete
 	//
@@ -244,7 +244,7 @@ func BenchmarkBowlExclusiveWrite(b *testing.B) {
 	b.Logf("Finished")
 }
 
-func BenchmarkBowlExclusiveRead(b *testing.B) {
+func BenchmarkBowlRead(b *testing.B) {
 	b.StopTimer()
 	bowl := NewBOWL[int, int](cmpTest)
 	chInsert := make(chan []Item[int, int], 4096)

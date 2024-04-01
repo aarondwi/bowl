@@ -307,8 +307,16 @@ func (b *Bowl[k, v]) ScanRange(
 
 	node := b.getNextNodeFromHead(fromKey)
 	node = b.getCorrectNode(fromKey, node)
-	node.ScanGreaterThanEqual(fromKey, fn)
 
+	// when all the values are all contained in the node
+	ok, _ := node.CheckKeyStrictlyLessThanMax(toKey)
+	if ok {
+		node.ScanRange(fromKey, toKey, fn)
+		return
+	}
+
+	// possibly more than current node only
+	node.ScanGreaterThanEqual(fromKey, fn)
 	for {
 		next, _ := node.GetNextNodeAt(0)
 		if next == nil {

@@ -27,7 +27,7 @@ func TestBOWLNode(t *testing.T) {
 	if err != nil {
 		t.Fatalf("It should be okay to insert, but instead we got %v", err)
 	}
-	for i := 32; i > 1; i-- {
+	for i := NODE_SIZE; i > 1; i-- {
 		err = bn.Insert(Item[int, int]{Key: i, Value: i})
 		if err != nil {
 			t.Fatalf("It should be okay to insert, but instead we got %v", err)
@@ -35,11 +35,11 @@ func TestBOWLNode(t *testing.T) {
 	}
 
 	cnt := bn.GetCount()
-	if cnt != 32 {
+	if cnt != NODE_SIZE {
 		t.Fatalf("We should have 32 data, but instead we only have %d", cnt)
 	}
 
-	err = bn.Insert(Item[int, int]{Key: 250})
+	err = bn.Insert(Item[int, int]{Key: 500})
 	if err == nil || err != ErrNodeIsFull {
 		t.Fatalf("err should be errNodeIsFull, but instead we got %v", err)
 	}
@@ -60,11 +60,11 @@ func TestBOWLNode(t *testing.T) {
 		t.Fatalf("Val (minKey) should be 1, but instead we got %d", val)
 	}
 
-	_, err = bn.Get(33, math.MinInt)
+	_, err = bn.Get(257, math.MinInt)
 	if err == nil || err != ErrDataNotFound {
 		t.Fatalf("err should be errDataNotFound, but instead we got %v", err)
 	}
-	ok = bn.Exist(33)
+	ok = bn.Exist(257)
 	if ok {
 		t.Fatalf("It shouldn't be found, cause `get` already return errDataNotFound, but instead it is")
 	}
@@ -74,7 +74,7 @@ func TestBOWLNode(t *testing.T) {
 		t.Fatalf("It shouldn't be an error, cause node has data, but instead we got %v", err)
 	}
 	if ok {
-		t.Fatal("It should be false, cause current max is key `1`")
+		t.Fatal("It should be false, cause current min is key `1`")
 	}
 
 	ok, err = bn.CheckKeyStrictlyLessThanMin(0)
@@ -82,15 +82,15 @@ func TestBOWLNode(t *testing.T) {
 		t.Fatalf("It shouldn't be an error, cause node has data, but instead we got %v", err)
 	}
 	if !ok {
-		t.Fatal("It should be true, cause current max is key `1`")
+		t.Fatal("It should be true, cause current min is key `1`")
 	}
 
-	ok, err = bn.CheckKeyStrictlyLessThanMax(35)
+	ok, err = bn.CheckKeyStrictlyLessThanMax(260)
 	if err != nil {
 		t.Fatalf("It shouldn't be an error, cause node has data, but instead we got %v", err)
 	}
 	if ok {
-		t.Fatal("It should be false, cause current max is key `32`")
+		t.Fatalf("It should be false, cause current max is key `%d`", NODE_SIZE)
 	}
 
 	err = bn.Update(Item[int, int]{Key: 16, Value: 50})
@@ -102,14 +102,14 @@ func TestBOWLNode(t *testing.T) {
 		t.Fatalf("It should be 50 after we updated it, but instead we got %d", val)
 	}
 
-	err = bn.Update(Item[int, int]{Key: 34, Value: 34})
+	err = bn.Update(Item[int, int]{Key: 275, Value: 275})
 	if err == nil || err != ErrDataNotFound {
-		t.Fatalf("updating 34 should fail with errDataNotFound, but instead we got %v", err)
+		t.Fatalf("updating 275 should fail with errDataNotFound, but instead we got %v", err)
 	}
 
-	err = bn.Delete(41)
+	err = bn.Delete(301)
 	if err == nil || err != ErrDataNotFound {
-		t.Fatalf("deleting 41 should fail with errDataNotFound, but instead we got %v", err)
+		t.Fatalf("deleting 301 should fail with errDataNotFound, but instead we got %v", err)
 	}
 
 	err = bn.Delete(17)
@@ -121,8 +121,8 @@ func TestBOWLNode(t *testing.T) {
 		t.Fatal("It should be false, cause 17 already got deleted, but it is not")
 	}
 	cnt = bn.GetCount()
-	if cnt != 31 {
-		t.Fatalf("We should now only have 31 data, cause 17 already got deleted, but instead we only have %d", cnt)
+	if cnt != NODE_SIZE-1 {
+		t.Fatalf("We should now only have 255 data, cause 17 already got deleted, but instead we only have %d", cnt)
 	}
 
 	err = bn.Insert(Item[int, int]{Key: 11})
@@ -130,7 +130,7 @@ func TestBOWLNode(t *testing.T) {
 		t.Fatalf("err should be ErrKeyAlreadyExist, but instead we got %v", err)
 	}
 
-	err = bn.Insert(Item[int, int]{Key: 38, Value: 38})
+	err = bn.Insert(Item[int, int]{Key: 299, Value: 299})
 	if err != nil {
 		t.Fatalf("It should be inserted cause we have slot, but instead we got %v", err)
 	}
@@ -140,15 +140,15 @@ func TestBOWLNode(t *testing.T) {
 		t.Fatalf("It shouldn't be an error, cause node has data, but instead we got %v", err)
 	}
 	if !ok {
-		t.Fatal("It should be true, cause current max is key `38`")
+		t.Fatal("It should be true, cause current max is key `299`")
 	}
 
 	newNode := bn.SplitIntoNewNode(10)
-	if !bn.Exist(16) || !newNode.Exist(18) {
-		t.Fatalf("It should be split evenly, with 16 and 18 as the cut position, but instead we got %v and %v", bn.data, newNode.data)
+	if !bn.Exist(16) || !newNode.Exist(140) {
+		t.Fatalf("It should be split evenly, with 16 and 140 as the cut position, but instead we got %v and %v", bn.data, newNode.data)
 	}
 
-	if bn.GetCount() != 16 || newNode.GetCount() != 16 {
+	if bn.GetCount() != 128 || newNode.GetCount() != 128 {
 		t.Fatalf("Both should be 16, but instead we got %d and %d", bn.GetCount(), newNode.GetCount())
 	}
 }
