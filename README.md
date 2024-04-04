@@ -7,7 +7,7 @@ Won't do any other low level optimizations, will just see how good this optimiza
 # benchmark
 
 Given
-1. MAX_HEIGHT = 64
+1. MAX_HEIGHT = 32 or 64
 2. NODE_SIZE = 256
 3. 1024 key/value per inserts, ordered per batch
 

@@ -2,12 +2,24 @@ package bowl
 
 import (
 	"fmt"
+	"math/rand"
 	"sync"
 )
 
 const (
-	MAX_HEIGHT int = 64
+	MAX_HEIGHT int = 32
 )
+
+var rnd = rand.New(rand.NewSource(rand.Int63()))
+
+// this function is not goroutine-safe
+func generateLevel(maxHeight int) int {
+	level := 1
+	for rnd.Float64() < 0.5 && level < maxHeight {
+		level++
+	}
+	return level
+}
 
 // Bowl is an unrolled skip list where every operation grabs single mutex,
 // reducing concurrency possibility, but gain simplicity of development,
@@ -20,8 +32,8 @@ const (
 type Bowl[k comparable, v any] struct {
 	sync.Mutex
 	head *Node[k, v]
-	ch   <-chan int
-	cmp  Comparator[k]
+	// ch   <-chan int
+	cmp Comparator[k]
 
 	// this variables would hold all the latest pointing nodes for all height
 	// the goal is not to scan from the beginning just to connect pointers on any new nodes
@@ -36,10 +48,10 @@ type Bowl[k comparable, v any] struct {
 func NewBOWL[k comparable, v any](cmp Comparator[k]) *Bowl[k, v] {
 	// empty node for head, so can skip logic for removing head if empty
 	head := NewEmptyNode[k, v](MAX_HEIGHT, cmp)
-	ch := RandomLevelGenerator(MAX_HEIGHT)
+	// ch := RandomLevelGenerator(MAX_HEIGHT)
 	latestPointingNodes := make([]*Node[k, v], MAX_HEIGHT)
 
-	return &Bowl[k, v]{head: head, ch: ch, cmp: cmp, latestPointingNodes: latestPointingNodes}
+	return &Bowl[k, v]{head: head, cmp: cmp, latestPointingNodes: latestPointingNodes}
 }
 
 func (b *Bowl[k, v]) resetLatestPointingNodes() {
@@ -146,7 +158,7 @@ func (b *Bowl[k, v]) Insert(ihs []Item[k, v]) []error {
 		currentNode = b.getCorrectNodeFromItemHandle(ih, currentNode)
 		err := currentNode.Insert(ih)
 		if err != nil && err == ErrNodeIsFull {
-			newHeight := <-b.ch
+			newHeight := generateLevel(MAX_HEIGHT)
 			newNode := currentNode.SplitIntoNewNode(newHeight)
 
 			minHeight := newHeight
@@ -376,7 +388,7 @@ func (b *Bowl[k, v]) getNextNodeFromHead(key k) *Node[k, v] {
 	n, _ := b.head.GetNextNodeAt(0)
 	if n == nil {
 		// meaning this BOWL is empty, create new
-		nextHeight := <-b.ch
+		nextHeight := generateLevel(MAX_HEIGHT)
 		newNode := NewEmptyNode[k, v](nextHeight, b.cmp)
 		for i := 0; i < nextHeight; i++ {
 			b.head.ConnectNode(i, newNode)

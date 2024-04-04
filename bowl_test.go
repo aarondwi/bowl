@@ -203,30 +203,33 @@ func BenchmarkBowlWrite(b *testing.B) {
 	// as it is already representative about update and delete
 	//
 	// update and delete both also search, but will not result in reconnection scheme
-	bowl := NewBOWL[int, int](cmpTest)
-
 	rnd := rand.New(rand.NewSource(rand.Int63()))
-	data := make([]Item[int, int], 0, 1024)
+	b.StopTimer()
+	allData := make([][]Item[int, int], 0, b.N)
 
-	b.Log("set counter to 0")
-	counter := 0
 	for i := 0; i < b.N; i++ {
-		b.StopTimer()
 		prev := 0
+		data := make([]Item[int, int], 0, 1024)
 		for j := 0; j < 1024; j++ {
 			val := prev + rnd.Intn(65536) + 1
 			data = append(data, Item[int, int]{
 				Key: val, Value: val})
 			prev = val
 		}
-		b.StartTimer()
-		errs := bowl.Insert(data)
+		allData = append(allData, data)
+	}
+	b.StartTimer()
+
+	b.Log("set counter to 0")
+	counter := 0
+	bowl := NewBOWL[int, int](cmpTest)
+	for i := 0; i < b.N; i++ {
+		errs := bowl.Insert(allData[i])
 		for _, err := range errs {
 			if err != nil && err != ErrKeyAlreadyExist {
 				b.Fatal(err)
 			}
 		}
-		data = data[:0]
 		counter += 1
 	}
 
