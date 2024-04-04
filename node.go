@@ -100,12 +100,23 @@ func (n *Node[k, v]) GetCount() int {
 //
 // Should only be called when Lock is held, or when no concurrency is guaranteed
 func (n *Node[k, v]) GetPositionLessThanEqual(key k) int {
-	for i := 0; i < n.dataCount; i++ {
-		if n.cmp(key, n.data[i].Key) <= 0 {
-			return i
+	if n.dataCount == 0 {
+		return -1
+	}
+	low := 0
+	high := n.dataCount - 1
+	for high >= low {
+		mid := low + ((high - low) / 2)
+		cmp := n.cmp(n.data[mid].Key, key)
+		if cmp == 0 {
+			return mid
+		} else if cmp == -1 {
+			low = mid + 1
+		} else {
+			high = mid - 1
 		}
 	}
-	return -1
+	return low
 }
 
 // GetPositionGreaterThanEqual returns the position

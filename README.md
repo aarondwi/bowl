@@ -5,8 +5,10 @@ An experimental single-threaded skip list prototype, which is a unrolled-skip-li
 Won't do any other low level optimizations, will just see how good this optimization is
 
 # benchmark
-With MAX_HEIGHT = 64 + NODE_SIZE = 256, reaching a rate of 1.76M/s for ordered inserts
 
-## todo
+Given
+1. MAX_HEIGHT = 64
+2. NODE_SIZE = 256
+3. 1024 key/value per inserts, ordered per batch
 
-1. Add fuzzy test
+It is reaching a rate of 1.6-1.8M/s

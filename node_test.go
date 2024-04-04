@@ -242,7 +242,10 @@ func TestBOWLNodeConnect(t *testing.T) {
 func TestBOWLNodeScan(t *testing.T) {
 	bn := NewEmptyNode[int, int](16, cmpTest)
 
-	for i := 30; i > 0; i-- {
+	for i := 15; i > 0; i-- {
+		bn.Insert(Item[int, int]{Key: i, Value: i})
+	}
+	for i := 16; i <= 30; i++ {
 		bn.Insert(Item[int, int]{Key: i, Value: i})
 	}
 
